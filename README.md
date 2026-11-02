@@ -2,7 +2,7 @@
 
 An interactive course-grade calculator. Drag sliders, see your letter grade change, and find out what you need on everything left.
 
-**Live site:** add your GitHub Pages link here.
+**Live site:** https://ia4252.github.io/Grade_Calculator/
 
 ## What it does
 
@@ -34,3 +34,5 @@ To host it, push this repo to GitHub, then go to **Settings → Pages**, choose 
 ## Disclaimer
 
 This is an unofficial calculator, not affiliated with any university or course. Your instructor and official gradebook have the last word.
+
+Coded with Claude. 

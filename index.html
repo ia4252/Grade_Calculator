@@ -321,6 +321,7 @@ select, .edit input[type=text], .edit input[type=number], .edit textarea, #codeT
             <tr><td>category</td><td>name, weight, and optionally scores, drop, out_of, score_weights (1;1;2), scale_up (yes), exam (yes), score_names (Quiz A;Quiz B)</td></tr>
             <tr><td>grade</td><td>name is the letter, value is its minimum. Leave these out to use the A+ to F scale.</td></tr>
             <tr><td>date</td><td>name and value, like Final and Dec 9</td></tr>
+            <tr><td>note</td><td>name and value, added to the class's rules list</td></tr>
             <tr><td>deduction</td><td>name, step, and value, like 4=5; 8=F or 5 per after 3</td></tr>
             <tr><td>setting</td><td>name is one of class, title, semester, professor, university, source, description, replace_with, replace_in, better_of_category, better_of_with, scale_up_multiply, scale_up_add, scale_up_cap, plan_first, plan_second, rounding (none, half, whole), cutoffs_slide, deduction_limit</td></tr>
           </tbody>
@@ -785,9 +786,10 @@ function normCfg(x) {
     const pool = ex.length >= 2 ? ex : keys;
     focus = [pool[pool.length - 2], pool[pool.length - 1]];
   }
+  const notes = (Array.isArray(x.notes) ? x.notes : []).slice(0, 12).map(r => [str(r[0], 40), str(r[1], 400)]).filter(r => r[0] || r[1]);
   const dates = (Array.isArray(x.dates) ? x.dates : []).slice(0, 12).map(d => [str(d[0], 40), str(d[1], 40)]).filter(d => d[0] || d[1]);
   const round = [0, .5, 1].includes(+x.round) ? +x.round : 0;
-  return { id: /^[\w-]{1,40}$/.test(x.id || '') ? x.id : '', name, title: str(x.title, 80), semester: str(x.semester, 30), prof: str(x.prof, 60), univ: str(x.univ, 60), source: str(x.source, 120), tagline: str(x.tagline, 300), dates, cats, replace, bestOf, link, pens, penCap, slides: !!x.slides, curve, focus, scale, round };
+  return { id: /^[\w-]{1,40}$/.test(x.id || '') ? x.id : '', name, title: str(x.title, 80), semester: str(x.semester, 30), prof: str(x.prof, 60), univ: str(x.univ, 60), source: str(x.source, 120), tagline: str(x.tagline, 300), dates, notes, cats, replace, bestOf, link, pens, penCap, slides: !!x.slides, curve, focus, scale, round };
 }
 /* Course total with one group of scores pushed down and up by d points, or across 0 to 100 when d is 0. */
 function swingRange(c, s, keys, d, read) {
@@ -822,7 +824,7 @@ function csvToCfg(text) {
   if (!all.length) throw new Error('Paste a CSV or choose a file first.');
   const head = all[0].r.map(h => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
   if (!head.includes('kind') || !head.includes('name')) throw new Error('The first row needs column names, including kind and name. Copy the template to see the layout.');
-  const set = {}, cats = [], scale = [], dates = [], pens = [];
+  const set = {}, cats = [], scale = [], dates = [], pens = [], notes = [];
   const yes = (v, n) => {
     if (/^(y|yes|true|1|x)$/i.test(v)) return true;
     if (!v || /^(n|no|false|0)$/i.test(v)) return false;
@@ -836,6 +838,7 @@ function csvToCfg(text) {
     if (!name) throw new Error(`Row ${n}: the name column is empty.`);
     if (kind === 'setting') set[name.toLowerCase().replace(/[\s-]+/g, '_')] = { v: value, n };
     else if (kind === 'date') dates.push([name, value]);
+    else if (kind === 'note') notes.push([name, value]);
     else if (kind === 'grade') scale.push([name, number(value, n, name)]);
     else if (kind === 'deduction') {
       const step = g('step') ? number(g('step'), n, 'step') : 1, per = value.match(/^([\d.]+)\s+per\s+after\s+([\d.]+)$/i);
@@ -858,7 +861,7 @@ function csvToCfg(text) {
         return { k: `${id}_${i}`, n: nm, sh: dig ? nm[0] + dig[1] : nm.slice(0, 5), exam, w: iw[i] || 1 };
       });
       cats.push({ id, name, weight: number(g('weight'), n, `${name} weight`), drop: g('drop') ? number(g('drop'), n, 'drop') : 0, curved: yes(g('scale_up'), n), outOf: g('out_of') ? number(g('out_of'), n, 'out_of') : null, items });
-    } else throw new Error(`Row ${n}: unknown kind "${g('kind')}". Use setting, category, grade, date or deduction.`);
+    } else throw new Error(`Row ${n}: unknown kind "${g('kind')}". Use setting, category, grade, date, deduction or note.`);
   }
   if (!cats.length) throw new Error('Add at least one category row.');
   const val = k => (set[k] ? set[k].v : '');
@@ -887,7 +890,7 @@ function csvToCfg(text) {
   if (!(rd in rmap)) throw new Error(`Row ${set.rounding.n}: rounding must be none, half or whole.`);
   return {
     name: val('class') || val('class_name') || val('name'), title: val('title'), semester: val('semester'), prof: val('professor') || val('prof'), univ: val('university'),
-    source: val('source'), tagline: val('description'), dates, cats, replace, bestOf, curve, focus, pens,
+    source: val('source'), tagline: val('description'), dates, notes, cats, replace, bestOf, curve, focus, pens,
     penCap: val('deduction_limit'), slides: /^(y|yes|true|1|x)$/i.test(val('cutoffs_slide')), scale: scale.length ? scale : CSV_SCALE.map(r => r.slice()), round: rmap[rd]
   };
 }
@@ -910,6 +913,7 @@ function cfgToCsv(c) {
       scale_up: x.curved ? 'yes' : '', exam: x.items.some(i => i.exam) ? 'yes' : '', score_names: auto ? '' : x.items.map(i => i.n).join(';') });
   }
   for (const r of c.scale) row({ kind: 'grade', name: r[0], value: r[1] });
+  for (const n of c.notes || []) row({ kind: 'note', name: n[0], value: n[1] });
   for (const p of c.pens || []) row({ kind: 'deduction', name: p.name, value: p.steps ? p.steps.map(r => `${r[0]}=${r[1]}`).join('; ') : `${p.per} per after ${p.free}`, step: p.step === 1 ? '' : p.step });
   return rows.map(r => r.map(v => /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n') + '\n';
 }
@@ -1034,7 +1038,8 @@ function cleanStore(raw) {
     if (BUILTIN[id] || !/^[\w-]{1,40}$/.test(id) || !raw.classes || !raw.classes[id]) continue;
     try { const c = normCfg({ ...raw.classes[id], id }); out.classes[id] = c; out.order.push(id); } catch (e) {}
   }
-  if (raw.scores && typeof raw.scores === 'object') for (const id of [...Object.keys(BUILTIN), ...out.order]) if (raw.scores[id]) out.scores[id] = raw.scores[id];
+  if (raw.scores && typeof raw.scores === 'object') for (const id of Object.keys(raw.scores)) if (BUILTIN[id] || out.classes[id] || /^pub_[\w-]{1,40}$/.test(id)) out.scores[id] = raw.scores[id];
+  out.wanted = /^pub_[\w-]{1,40}$/.test(raw.active || '') ? raw.active : null;
   out.active = BUILTIN[raw.active] || out.classes[raw.active] ? raw.active : 'chem101';
   out.savedAt = Number.isFinite(raw.savedAt) ? raw.savedAt : 0;
   return out;
@@ -1050,7 +1055,7 @@ try {
   }
 } catch (e) {}
 function save() {
-  store.savedAt = Date.now();
+  store.savedAt = Date.now(); delete store.wanted;
   const text = JSON.stringify(store);
   try { localStorage.setItem(KEY, text); } catch (e) {}
   if (remote) { clearTimeout(remoteTimer); remoteTimer = setTimeout(() => { remote.set({ json: JSON.stringify(store), savedAt: store.savedAt }).catch(() => {}); }, 900); }
@@ -1139,7 +1144,7 @@ function buildClass() {
   $('tag').textContent = C.tagline || 'Add points drop by drop and watch your grade change color.';
   $('dates').innerHTML = C.dates.map(d => `<span>${esc(d[0])} <b>${esc(d[1])}</b></span>`).join('');
   $('dates').hidden = !C.dates.length;
-  $('classSel').innerHTML = [...Object.keys(BUILTIN), ...store.order].map(id => { const g = getCfg(id); return `<option value="${esc(id)}">${esc([g.name, g.semester, g.prof].filter(Boolean).join(' · '))}</option>`; }).join('');
+  fillClassSel();
   $('classSel').value = C.id;
   const rowHtml = (it, cat) => {
     const k = esc(it.k), out = OUT[it.k], max = out || 100, step = out && out > 100 ? 1 : .5;
@@ -1186,6 +1191,12 @@ function buildClass() {
   $('rulesList').innerHTML = (C.rules || genRules()).map(([h, t]) => `<li><strong>${esc(h)}</strong> ${esc(t)}</li>`).join('');
   syncInputs();
 }
+function fillClassSel() {
+  const opt = id => { const g = getCfg(id); return `<option value="${esc(id)}">${esc([g.name, g.semester, g.prof].filter(Boolean).join(' · '))}</option>`; };
+  const mine = store.order.map(opt).join('');
+  $('classSel').innerHTML = `<optgroup label="Classes for everyone">${Object.keys(BUILTIN).map(opt).join('')}</optgroup>` + (mine ? `<optgroup label="My classes">${mine}</optgroup>` : '');
+  $('classSel').value = C.id;
+}
 function buildFocus() {
   const [a, b] = C.focus, A = NAME[a], B = NAME[b];
   $('planH').textContent = `Plan ${A} and ${onName(b)}`;
@@ -1221,6 +1232,7 @@ function genRules() {
   const wsum = C.cats.reduce((a, x) => a + x.weight, 0);
   if (Math.abs(wsum - 100) > .01) out.push(['Weights add to:', `${pct(wsum)}, so each is rescaled to make 100%.`]);
   out.push(['Cutoffs:', C.scale.slice(0, -1).map(r => `${r[0]} ${r[1]}`).join(', ') + (C.round ? `, rounded to the nearest ${C.round === 1 ? 'whole number' : 'half point'}.` : ', with no rounding.')]);
+  for (const n of C.notes || []) out.push([n[0].replace(/:?$/, ':'), n[1]]);
   out.push(['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator.']);
   return out;
 }
@@ -1979,7 +1991,7 @@ function renderLuck(li) {
 
 /* Class picker */
 $('classSel').addEventListener('change', e => { closeEditor(); useClass(e.target.value); save(); schedule(); });
-function exportable(c) { const { name, title, semester, prof, univ, source, tagline, dates, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round } = c; return { titrator: 2, name, title, semester, prof, univ, source, tagline, dates, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round }; }
+function exportable(c) { const { name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round } = c; return { titrator: 2, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round }; }
 const EXAMPLE_CSV = () => cfgToCsv(normCfg({
   name: 'Physics 141', title: 'General Physics', semester: 'Fall 2026', prof: 'Prof. Example', univ: 'Example University', source: 'Fall 2026 syllabus',
   dates: [['Midterm 2', 'Oct 20'], ['Final', 'Dec 12']],
@@ -2021,7 +2033,7 @@ function openCode(mode) {
   box.hidden = false; box.dataset.mode = mode;
   $('importTools').hidden = !imp; $('shareTools').hidden = imp; $('csvHelp').hidden = !imp; $('codeAdd').hidden = !imp;
   $('codeText').value = ''; $('codeFile').value = ''; $('codePreview').hidden = true;
-  $('codeNote').textContent = imp ? 'Choose a CSV file or paste one here. A class code works too. Spreadsheet cells can be pasted straight in.' : 'Share a class setup. CSV opens in any spreadsheet, and a class code is shorter to send. Neither includes your scores.';
+  $('codeNote').textContent = imp ? 'Choose a CSV file or paste one here. A class code works too. It saves for you only, in this browser.' : 'Share a class setup. CSV opens in any spreadsheet, and a class code is shorter to send. Neither includes your scores.';
   if (imp) $('codeAdd').disabled = true;
 }
 $('codeText').addEventListener('input', codePreview);
@@ -2234,6 +2246,25 @@ if (window.ResizeObserver) new ResizeObserver(schedule).observe($('mapBox'));
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', schedule); } catch (e) {}
 new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+
+/* Shared classes: every CSV in the site's classes folder, listed by classes/index.json. */
+(async () => {
+  const wanted = store.wanted, res = await fetch('classes/index.json', { cache: 'no-cache' });
+  if (!res.ok) return;
+  const list = await res.json();
+  if (!Array.isArray(list)) return;
+  const loaded = await Promise.all(list.filter(f => /^[\w.-]+\.csv$/.test(f)).map(async f => {
+    try {
+      const r = await fetch('classes/' + encodeURIComponent(f), { cache: 'no-cache' });
+      if (!r.ok) throw new Error('not found');
+      const id = 'pub_' + f.replace(/\.csv$/, '').replace(/[^\w-]/g, '-').slice(0, 40);
+      return { ...normCfg(csvToCfg(await r.text())), id, builtin: true };
+    } catch (e) { console.warn(`Skipped classes/${f}: ${e.message}`); return null; }
+  }));
+  for (const c of loaded) if (c) BUILTIN[c.id] = c;
+  if (wanted && BUILTIN[wanted] && C.id === 'chem101') useClass(wanted); else fillClassSel();
+  schedule();
+})().catch(() => {});
 
 /* Account sync: private to each signed-in viewer. Without it the page runs on browser storage alone. */
 (async () => {

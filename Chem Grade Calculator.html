@@ -1,0 +1,2290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grade Titrator</title>
+<meta name="description" content="Play with your course grade: sliders, what you need for each letter, and presets for real class grading rules.">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px) }
+body { margin: 0; font: 14px system-ui, -apple-system, "Segoe UI", sans-serif }
+img { max-width: 100% }
+[hidden] { display: none !important }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: class bar on top, a sticky lab bench of inputs on the left, instruments reading them on the right.
+   Grade colors follow universal indicator paper, red at F through violet at A+. */
+:root {
+  --bg: #eff3f1; --panel: #fbfcfb; --sunk: #e3e9e6; --line: #cfd8d4;
+  --fg: #14231f; --fg2: #47574f; --fg3: #6a7a73;
+  --accent: #1f5fbf; --accent-soft: #dbe6f6; --on-accent: #ffffff;
+  --on-band: #14231f; --mark: #14231f; --mark-ring: #fbfcfb;
+  --gAp: #a9abf6; --gA: #8bbdee; --gAm: #7fd3c3;
+  --gBp: #8fd99c; --gB: #ace08a; --gBm: #c9e67c;
+  --gCp: #e3e870; --gC: #f2e26e; --gCm: #f7d870;
+  --gDp: #f8c97b; --gD: #f6bb85; --gDm: #f4ad90; --gF: #f09c98;
+  --display: "Familjen Grotesk", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body: "Instrument Sans", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+  --mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111816; --panel: #19221f; --sunk: #232e2a; --line: #33423c;
+  --fg: #e7efeb; --fg2: #b3c1ba; --fg3: #8d9c95;
+  --accent: #79aef5; --accent-soft: #24364f; --on-accent: #0f1a2b;
+  --mark: #ffffff; --mark-ring: #14231f;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111816; --panel: #19221f; --sunk: #232e2a; --line: #33423c;
+  --fg: #e7efeb; --fg2: #b3c1ba; --fg3: #8d9c95;
+  --accent: #79aef5; --accent-soft: #24364f; --on-accent: #0f1a2b;
+  --mark: #ffffff; --mark-ring: #14231f;
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+[hidden] { display: none !important }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.45 }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg) }
+.page { max-width: 1240px; margin: 0 auto; padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+h1, h2 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.05; letter-spacing: -.02em }
+h2 { font-size: 21px; line-height: 1.2; letter-spacing: -.01em }
+p { margin: 0 }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+button { font: inherit; color: inherit }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.head { display: grid; gap: 8px; margin-bottom: 20px }
+.head p { color: var(--fg2); max-width: 62ch }
+.dates { display: flex; flex-wrap: wrap; gap: 4px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--fg3) }
+.dates b { color: var(--fg); font-weight: 500 }
+
+.layout { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); gap: 24px; align-items: start }
+.bench { position: sticky; top: calc(12px + env(safe-area-inset-top, 0px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px }
+.instruments { display: grid; gap: 32px; min-width: 0 }
+.instrument { display: grid; gap: 12px; min-width: 0 }
+.instrument > .lede { color: var(--fg2); max-width: 68ch }
+
+/* Element tile */
+.readout { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 14px; align-items: stretch }
+.tile { border-radius: 6px; padding: 8px 10px; color: var(--on-band); display: grid; grid-template-rows: auto 1fr auto; background: var(--gB); transition: background .2s }
+.tile .z { font-family: var(--mono); font-size: 15px; font-weight: 600 }
+.tile .sym { font-family: var(--display); font-weight: 700; font-size: 56px; line-height: 1; align-self: center; letter-spacing: -.02em }
+.tile .nm { font-size: 11.5px; font-weight: 500 }
+.say { display: grid; gap: 6px; align-content: center; min-width: 0 }
+.say .main { font-weight: 600; line-height: 1.3 }
+.say .sub { font-size: 13px; color: var(--fg2); line-height: 1.35 }
+
+.strip { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px }
+.strip span { font-family: var(--mono); font-size: 10.5px; font-weight: 500; text-align: center; padding: 5px 0; color: var(--on-band); opacity: .5; border-radius: 2px }
+.strip span.on { opacity: 1; outline: 2px solid var(--fg); outline-offset: 0; font-weight: 600 }
+
+/* Inputs */
+.status { font-size: 12.5px; color: var(--fg2); background: var(--accent-soft); border-radius: 6px; padding: 6px 10px }
+.rows { display: grid; gap: 10px }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 2px 10px; align-items: center }
+.row .top { display: flex; align-items: baseline; gap: 8px; min-width: 0 }
+.row label.name { font-weight: 600; font-size: 14px }
+.row .wt { font-family: var(--mono); font-size: 11.5px; color: var(--fg3) }
+.row input[type=range] { width: 100%; margin: 0; accent-color: var(--accent); height: 22px; grid-column: 1 }
+.row input[type=range]:disabled { opacity: .35 }
+.row input[type=number] { grid-column: 2; grid-row: 1 / span 2; width: 100%; font: 500 16px var(--mono); padding: 7px 6px; text-align: right; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-variant-numeric: tabular-nums }
+.gradedbox { margin-left: auto; font-size: 11.5px; color: var(--fg2); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap }
+.gradedbox input { margin: 0; accent-color: var(--accent) }
+
+.groupl { font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--fg3) }
+.btns { display: flex; flex-wrap: wrap; gap: 6px }
+.btn { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-size: 13px; font-weight: 500; cursor: pointer }
+.btn:hover { border-color: var(--accent) }
+.btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+.btn[disabled] { opacity: .4; cursor: default; border-color: var(--line) }
+.btn.small { padding: 3px 8px; font-size: 12px }
+.opt { display: grid; gap: 6px }
+.foot { display: flex; justify-content: flex-end }
+.linkish { background: none; border: 0; color: var(--fg3); font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 2px }
+
+/* Mekko */
+.mekko { display: flex; gap: 2px; height: 130px; align-items: stretch }
+.mcol { background: var(--sunk); position: relative; border-radius: 3px 3px 0 0; min-width: 0 }
+.mcol i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); opacity: .85; display: block; border-radius: 3px 3px 0 0 }
+.mcol.final i, .mcol.swapped i { background: var(--gAp); opacity: 1 }
+.mlabels { display: flex; gap: 2px; font-family: var(--mono); font-size: 11px; line-height: 1.3; text-align: center }
+.mlabels div { min-width: 0; overflow: hidden }
+.mlabels .lost { color: var(--fg3) }
+.mlabels b { font-weight: 600; display: block; font-family: var(--body) }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--fg2) }
+.key span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; background: var(--swatch) }
+
+/* Needs table */
+.tablewrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px }
+table { border-collapse: collapse; width: 100%; font-size: 14px }
+th { font-size: 12px; font-weight: 600; color: var(--fg2); text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--line); line-height: 1.2 }
+th:first-child { text-align: left }
+td { padding: 3px 10px; text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--sunk) }
+tr:last-child td { border-bottom: 0 }
+td.g { text-align: left; padding: 4px 10px }
+.pill { display: inline-block; min-width: 34px; text-align: center; border-radius: 4px; padding: 1px 6px; color: var(--on-band); font-weight: 600 }
+td .cut { color: var(--fg3); font-size: 12px; margin-left: 6px }
+td.any { color: var(--fg3) } td.no { color: var(--fg3); text-decoration: line-through }
+tr.here td { background: var(--accent-soft) }
+.note { font-size: 13px; color: var(--fg2) }
+
+/* Planner */
+.goal { min-width: 40px; text-align: center; font-family: var(--mono); font-weight: 600; color: var(--on-band); border-color: transparent; background: var(--band) }
+.goal[aria-pressed="true"] { background: var(--band); color: var(--on-band); border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg) }
+.planctl { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center }
+.ifrow { display: grid; grid-template-columns: auto minmax(120px, 1fr) 74px; gap: 10px; align-items: center; flex: 1 1 320px; min-width: 0 }
+.ifrow label { font-weight: 600; font-size: 14px; white-space: nowrap }
+.ifrow input[type=range] { width: 100%; margin: 0; accent-color: var(--accent) }
+.ifrow input[type=number] { width: 100%; font: 500 16px var(--mono); padding: 7px 6px; text-align: right; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px }
+.verdict { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px }
+.verdict .big { font-family: var(--display); font-weight: 700; font-size: clamp(21px, 3.2vw, 28px); line-height: 1.15; text-wrap: balance }
+.verdict .sub { color: var(--fg2); font-size: 14px; max-width: 70ch }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--fg2) }
+.stats b { display: block; font: 600 16px var(--mono); color: var(--fg) }
+#planBox { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; touch-action: none; cursor: crosshair }
+#planBox svg { display: block; width: 100% }
+.grid td { padding: 2px 3px; border-bottom: 0 }
+.grid td.g { padding: 2px 8px }
+.grid th { padding: 6px 4px; white-space: nowrap }
+.grid { min-width: 560px }
+.gc { display: block; width: 100%; background: none; border: 1px solid transparent; border-radius: 4px; padding: 4px 3px; font: 500 13px var(--mono); text-align: right; cursor: pointer; font-variant-numeric: tabular-nums }
+.gc:hover:not([disabled]) { border-color: var(--accent) }
+.gc[disabled] { color: var(--fg3); cursor: default }
+.gc.same { background: var(--sunk); color: var(--fg2) }
+tr.goalrow td { background: var(--accent-soft) }
+tr.goalrow .gc.same { background: transparent; border-color: var(--line) }
+.hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--fg2) }
+
+/* Does Test 3 matter */
+.zones { position: relative; display: grid; gap: 6px }
+.zrow { display: grid; grid-template-columns: 92px minmax(0, 1fr) 96px; gap: 10px; align-items: center }
+.ztrack { display: flex; gap: 2px; height: 18px; min-width: 0 }
+.ztrack i { display: block; height: 100% }
+.ztrack .off { background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line); border-radius: 3px 0 0 3px }
+.ztrack .on { background: var(--accent); border-radius: 0 3px 3px 0 }
+.zt { font-size: 12px; color: var(--fg2); font-family: var(--mono); text-align: right; white-space: nowrap }
+.zrow.mine .zt { color: var(--fg); font-weight: 600 }
+.zaxis { display: grid; grid-template-columns: 92px minmax(0, 1fr) 96px; gap: 10px; font: 12px var(--mono); color: var(--fg3) }
+.zaxis div { display: flex; justify-content: space-between }
+.zline { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--fg); pointer-events: none }
+.zlayer { position: absolute; inset: 0; display: grid; grid-template-columns: 92px minmax(0, 1fr) 96px; gap: 10px; pointer-events: none }
+.zlayer > div { position: relative; grid-column: 2 }
+.key .off::before { box-shadow: inset 0 0 0 1px var(--line) }
+.key .mark::before { width: 2px; background: var(--fg); height: 12px; vertical-align: -1px }
+@media (max-width: 520px) {
+  .zrow, .zaxis, .zlayer { grid-template-columns: 76px minmax(0, 1fr) 74px; gap: 6px }
+  .ifrow { grid-template-columns: minmax(0, 1fr) 74px }
+  .ifrow label { grid-column: 1 / -1 }
+}
+
+/* Charts */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 18px; align-items: start }
+.chart { position: relative; touch-action: none; max-width: 560px }
+.chart canvas { display: block; width: 100%; aspect-ratio: 1 / 1; cursor: crosshair; border-radius: 6px }
+#payoffBox { position: relative; min-height: 300px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+#payoffBox svg { display: block; width: 100% }
+.tip { position: absolute; z-index: 5; pointer-events: none; background: var(--fg); color: var(--bg); font: 500 12.5px var(--mono); padding: 4px 8px; border-radius: 4px; white-space: nowrap }
+.side { display: grid; gap: 10px; font-size: 13.5px; color: var(--fg2) }
+
+.bars { display: grid; gap: 10px }
+.bar { display: grid; grid-template-columns: 96px minmax(0, 1fr) 52px; gap: 2px 10px; align-items: center }
+.bar .nm { font-weight: 600; font-size: 14px }
+.bar .tr { height: 12px; background: var(--sunk); border-radius: 0 3px 3px 0 }
+.bar .tr i { display: block; height: 100%; background: var(--accent); border-radius: 0 3px 3px 0 }
+.bar .v { font-family: var(--mono); font-size: 13.5px; text-align: right; font-variant-numeric: tabular-nums }
+.bar .why { grid-column: 2 / -1; font-size: 12.5px; color: var(--fg2) }
+.prob .tr i { background: var(--swatch) }
+.prob { grid-template-columns: 44px minmax(0, 1fr) 52px }
+.sim { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; max-width: 420px }
+.sim label { font-size: 14px; font-weight: 600 }
+.sim input { width: 100%; accent-color: var(--accent) }
+
+.rules { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; font-size: 13.5px; color: var(--fg2) }
+.rules ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 5px }
+.rules strong { color: var(--fg) }
+
+.mini { display: none; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: var(--bg); padding: 6px 0; margin-bottom: 8px }
+.mini div { display: flex; align-items: center; gap: 10px; border-radius: 6px; padding: 6px 12px; color: var(--on-band); font-weight: 600; background: var(--gB) }
+.mini .big { font-family: var(--display); font-size: 20px }
+.mini .num { font-size: 15px; margin-left: auto }
+
+@media (max-width: 920px) {
+  .layout { grid-template-columns: minmax(0, 1fr) }
+  .bench { position: static; max-height: none }
+  .mini { display: block }
+  .split { grid-template-columns: minmax(0, 1fr) }
+}
+@media (prefers-reduced-motion: reduce) { .tile { transition: none } }
+
+/* Class bar and class settings */
+.classbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px }
+select, .edit input[type=text], .edit input[type=number], .edit textarea, #codeText { font: 14px var(--body); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-width: 0 }
+#classSel { font-weight: 600; max-width: 100%; font-size: 15px }
+.edit { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 16px; margin-bottom: 24px }
+.edit h2 { font-size: 19px }
+.edit .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px }
+.edit .fld { display: grid; gap: 4px; align-content: start; min-width: 0 }
+.edit .fld > span { font-size: 12.5px; font-weight: 600; color: var(--fg2) }
+.edit input, .edit textarea, .edit select { width: 100% }
+.edit input[type=checkbox] { width: auto; accent-color: var(--accent) }
+.edit textarea { resize: vertical; font-family: var(--mono); font-size: 13px; line-height: 1.4 }
+.edit table { min-width: 660px }
+.edit th, .edit td { text-align: left; padding: 5px 6px; font-family: var(--body); border-bottom: 0 }
+.edit th.c, .edit td.c { text-align: center }
+.edit td input[type=number] { width: 68px }
+.inline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 14px }
+.inline select { width: auto; flex: 0 1 auto }
+.inline input[type=number] { width: 84px }
+.sumok { font-size: 13px; color: var(--fg2) }
+.err { font-size: 13.5px; font-weight: 600; color: var(--fg); background: var(--accent-soft); border-radius: 6px; padding: 6px 10px }
+.codebox { display: grid; gap: 8px; margin-top: 4px }
+#codeText { width: 100%; font: 12.5px var(--mono); resize: vertical }
+.edfoot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+
+.meta { font-weight: 600; color: var(--fg) !important }
+.source { font-size: 12.5px; color: var(--fg3) !important }
+.catgrp { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px }
+.catgrp summary { display: flex; align-items: baseline; gap: 8px; cursor: pointer; font-size: 14px }
+.catgrp summary .num { margin-left: auto; font-size: 13px }
+.catgrp[open] > .row { margin-top: 10px }
+.secrow { padding-left: 12px }
+.rangebar { position: relative; display: flex; gap: 1px; height: 30px }
+.rangebar span { display: flex; align-items: center; justify-content: center; font: 600 12px var(--mono); color: var(--on-band); min-width: 0; overflow: hidden }
+.rangebar i { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1px; background: var(--fg); border-radius: 2px }
+.zaxisp { display: flex; justify-content: space-between; font: 12px var(--mono); color: var(--fg3); margin-top: 5px }
+.needchips { display: flex; flex-wrap: wrap; gap: 6px 14px }
+.needchip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 13.5px }
+.needchip b { font-weight: 500 }
+.pengrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
+.edit table { min-width: 860px }
+
+.filebtn { position: relative; display: inline-block }
+.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100% }
+.filebtn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px }
+.csvhelp { font-size: 13px; color: var(--fg2) }
+.csvhelp summary { cursor: pointer; font-weight: 600 }
+.csvhelp table { min-width: 0; font-size: 13px; margin-top: 0 }
+.csvhelp td { text-align: left; font-family: var(--body); padding: 5px 8px; vertical-align: top }
+.csvhelp th { text-align: left }
+.csvhelp td:first-child { font-family: var(--mono); white-space: nowrap }
+
+.mcol.proj i { opacity: .5 }
+.key .pjk::before { opacity: .5 }
+.pickrow { gap: 8px }
+
+#allBox { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden }
+#allBox.drag { touch-action: none; cursor: ns-resize }
+#allBox svg { display: block; width: 100% }
+.allread { font-weight: 600 }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="head">
+    <h1 id="h1"></h1>
+    <p class="meta" id="meta"></p>
+    <p id="tag"></p>
+    <div class="dates" id="dates"></div>
+    <p class="source" id="source"></p>
+    <div class="classbar">
+      <label class="groupl" for="classSel">Class</label>
+      <select id="classSel"></select>
+      <button class="btn" id="btnEdit" type="button">Edit class</button>
+      <button class="btn" id="btnNew" type="button">New class</button>
+      <button class="btn" id="btnPaste" type="button">Import class</button>
+      <button class="btn" id="btnCopy" type="button">Share class</button>
+    </div>
+    <div class="codebox" id="codeBox" hidden>
+      <p class="note" id="codeNote"></p>
+      <div class="btns" id="importTools">
+        <label class="btn filebtn" for="codeFile">Choose CSV file<input type="file" id="codeFile" accept=".csv,.tsv,.txt,text/csv,text/plain"></label>
+        <button class="btn" id="tplCopy" type="button">Copy CSV template</button>
+      </div>
+      <div class="btns" id="shareTools">
+        <button class="btn" id="shareCsv" type="button">Copy as CSV</button>
+        <button class="btn" id="shareCode" type="button">Copy class code</button>
+      </div>
+      <textarea id="codeText" rows="6" spellcheck="false" aria-label="Class CSV or code"></textarea>
+      <p class="status" id="codePreview" hidden></p>
+      <details class="csvhelp" id="csvHelp">
+        <summary>CSV columns</summary>
+        <div class="tablewrap"><table>
+          <thead><tr><th scope="col">kind</th><th scope="col">Fill in</th></tr></thead>
+          <tbody>
+            <tr><td>category</td><td>name, weight, and optionally scores, drop, out_of, score_weights (1;1;2), scale_up (yes), exam (yes), score_names (Quiz A;Quiz B)</td></tr>
+            <tr><td>grade</td><td>name is the letter, value is its minimum. Leave these out to use the A+ to F scale.</td></tr>
+            <tr><td>date</td><td>name and value, like Final and Dec 9</td></tr>
+            <tr><td>note</td><td>name and value, added to the class's rules list</td></tr>
+            <tr><td>deduction</td><td>name, step, and value, like 4=5; 8=F or 5 per after 3</td></tr>
+            <tr><td>setting</td><td>name is one of class, title, semester, professor, university, source, description, replace_with, replace_in, better_of_category, better_of_with, scale_up_multiply, scale_up_add, scale_up_cap, plan_first, plan_second, rounding (none, half, whole), cutoffs_slide, deduction_limit</td></tr>
+          </tbody>
+        </table></div>
+      </details>
+      <div class="btns"><button class="btn primary" id="codeAdd" type="button">Add this class</button><button class="btn" id="codeClose" type="button">Close</button></div>
+    </div>
+  </header>
+
+  <section class="edit" id="editor" hidden aria-label="Class settings">
+    <h2 id="edTitle"></h2>
+    <div class="fields">
+      <label class="fld"><span>Class name</span><input type="text" id="edName" maxlength="60"></label>
+      <label class="fld"><span>Full title or section</span><input type="text" id="edCT" maxlength="80"></label>
+      <label class="fld"><span>Semester</span><input type="text" id="edSem" maxlength="30" placeholder="Fall 2026"></label>
+      <label class="fld"><span>Professor</span><input type="text" id="edProf" maxlength="60"></label>
+      <label class="fld"><span>University</span><input type="text" id="edUni" maxlength="60"></label>
+      <label class="fld"><span>Where this preset came from</span><input type="text" id="edSrc" maxlength="120" placeholder="Fall 2026 syllabus"></label>
+      <label class="fld"><span>Short description (optional)</span><input type="text" id="edTag" maxlength="300"></label>
+      <label class="fld"><span>Key dates, one per line (Final: Dec 9)</span><textarea id="edDates" rows="3"></textarea></label>
+    </div>
+    <div class="fld">
+      <span>Grade categories</span>
+      <div class="tablewrap"><table>
+        <thead><tr><th scope="col">Name</th><th scope="col">Weight %</th><th scope="col">Scores</th><th scope="col">Drop lowest</th><th scope="col">Out of</th><th scope="col">Score weights</th><th scope="col" class="c">Scale-up</th><th scope="col" class="c">Exam</th><th scope="col"></th></tr></thead>
+        <tbody id="edCats"></tbody>
+      </table></div>
+      <div class="edfoot"><button class="btn small" id="edAddCat" type="button">Add category</button><span class="sumok" id="edSum"></span></div>
+      <p class="note">Scores is how many separate grades share the category. Out of is for point scores like 19 of 20, and blank means percent. Score weights splits a category unevenly, like 1, 1, 2, 2. Exam marks the scores the planner should start on.</p>
+    </div>
+    <div class="fields">
+      <div class="fld"><span>Replacement rule</span>
+        <div class="inline"><select id="edRepBy" aria-label="Score that replaces"></select><span>replaces the lowest</span><select id="edRepCat" aria-label="Category it replaces in"></select><span>if higher</span></div>
+      </div>
+      <div class="fld"><span>Scale-up for checked categories</span>
+        <div class="inline"><span>×</span><input type="number" id="edMult" step="0.01" min="0" aria-label="Multiply by"><span>or +</span><input type="number" id="edPlus" step="0.5" min="0" aria-label="Add points"><span>capped at</span><input type="number" id="edCap" step="1" min="1" aria-label="Cap"></div>
+        <span class="note" style="font-weight:400">Fill in one, or both to get a switch between the two readings.</span>
+      </div>
+      <div class="fld"><span>Better-of rule, matched score by score</span>
+        <div class="inline"><span>Each</span><select id="edBestCat" aria-label="Category kept as the better of"></select><span>keeps the better of itself and</span><select id="edBestBy" aria-label="Category it is compared to"></select></div>
+      </div>
+      <div class="fld"><span>Plan between these two scores</span>
+        <div class="inline"><select id="edA" aria-label="First planned score"></select><span>and</span><select id="edB" aria-label="Second planned score"></select></div>
+      </div>
+    </div>
+    <div class="fields">
+      <label class="fld"><span>Grade scale, one per line, letter then minimum</span><textarea id="edScale" rows="7" spellcheck="false"></textarea></label>
+      <div class="fld"><span>Quick scales</span>
+        <div class="btns"><button class="btn small" id="edPlusMinus" type="button">A+ to F</button><button class="btn small" id="edPlain" type="button">A B C D F</button></div>
+        <label class="fld" style="margin-top:8px"><span>Rounding before the letter is assigned</span>
+          <select id="edRound"><option value="0">No rounding</option><option value="1">Nearest whole number</option><option value="0.5">Nearest half point</option></select></label>
+      </div>
+    </div>
+    <div class="fields">
+      <label class="fld"><span>Deductions off the final grade, one per line</span><textarea id="edPens" rows="3" spellcheck="false" placeholder="Absences (step 0.5): 4=5, 6=15, 8=F
+Late days: 5 per after 3"></textarea></label>
+      <div class="fld"><label class="fld"><span>Most deductions can take off (blank for no limit)</span><input type="number" id="edPenCap" min="0" step="1"></label>
+        <label class="inline" style="margin-top:8px"><input type="checkbox" id="edSlides"> Cutoffs may slide down</label></div>
+    </div>
+    <p class="err" id="edMsg" hidden></p>
+    <div class="edfoot">
+      <button class="btn primary" id="edSave" type="button"></button>
+      <button class="btn" id="edCancel" type="button">Cancel</button>
+      <button class="linkish" id="edDelete" type="button">Delete this class</button>
+    </div>
+  </section>
+
+  <div class="mini" aria-hidden="true"><div id="miniBar"><span class="big" id="miniL">B</span><span>course grade</span><span class="num" id="miniN">0</span></div></div>
+
+  <div class="layout">
+    <aside class="bench" aria-label="Your scores">
+      <div class="readout">
+        <div class="tile" id="tile">
+          <span class="z" id="tileN">0</span>
+          <span class="sym" id="tileL">B</span>
+          <span class="nm" id="tileName">course grade</span>
+        </div>
+        <div class="say">
+          <p class="main" id="sayMain"></p>
+          <p class="sub" id="saySub"></p>
+        </div>
+      </div>
+      <div class="strip" id="strip" aria-hidden="true"></div>
+      <p class="status" id="status"></p>
+      <div class="rows" id="rows"></div>
+      <div class="opt" id="penBox">
+        <span class="groupl">Deductions</span>
+        <div class="rows" id="pens"></div>
+      </div>
+      <div class="opt" id="slideBox">
+        <label class="groupl" for="slide">If the cutoffs slide down</label>
+        <div class="sim" style="max-width:none"><input type="range" id="slide" min="0" max="5" step="0.5" value="0" style="grid-column:1 / span 2"><span class="mono" id="slideV">none</span></div>
+      </div>
+      <div class="opt" id="scopeBox">
+        <span class="groupl">Try buttons and luck use</span>
+        <div class="btns" id="scopeBtns">
+          <button class="btn" id="scopeAll" data-s="all" type="button"></button>
+          <button class="btn" id="scopePair" data-s="pair" type="button">Planned two</button>
+        </div>
+      </div>
+      <div class="opt" id="presetBox">
+        <span class="groupl" id="presetL"></span>
+        <div class="btns" id="presets"></div>
+      </div>
+      <div class="opt" id="modesBox">
+        <span class="groupl" id="modesL"></span>
+        <div class="btns" id="modes">
+          <button class="btn" id="modeMult" data-mode="mult" type="button"></button>
+          <button class="btn" id="modePlus" data-mode="plus" type="button"></button>
+        </div>
+      </div>
+      <div class="foot"><button class="linkish" id="reset" type="button">Clear my scores</button></div>
+    </aside>
+
+    <main class="instruments">
+      <section class="instrument" id="planSec">
+        <h2 id="planH"></h2>
+        <div class="inline pickrow" id="pickRow">
+          <span class="groupl">Planning between</span>
+          <select id="pickA" aria-label="First planned score"></select><span>and</span><select id="pickB" aria-label="Second planned score"></select>
+        </div>
+        <div class="opt" id="goalsBox">
+          <span class="groupl">Grade I want</span>
+          <div class="btns" id="goals"></div>
+        </div>
+        <div class="planctl" id="planCtlRow">
+          <div class="btns" id="solveFor">
+            <button class="btn" id="solveB" type="button"></button>
+            <button class="btn" id="solveA" type="button"></button>
+          </div>
+          <div class="ifrow" id="planIf">
+            <label id="planL" for="planN"></label>
+            <input type="range" id="planR" min="0" max="100" step="0.5" aria-label="Score to assume">
+            <input type="number" id="planN" min="0" max="100" step="0.5" inputmode="decimal">
+          </div>
+        </div>
+        <div class="verdict">
+          <p class="big" id="planBig"></p>
+          <p class="sub" id="planSub"></p>
+          <p class="sub" id="planHeld"></p>
+          <div class="stats" id="planStats"></div>
+          <div class="btns"><button class="btn" id="planApply" type="button"></button></div>
+        </div>
+        <div id="planBox"><svg id="plan" role="img" aria-label="Chart of the score needed for the chosen grade"></svg><div class="tip" id="planTip" hidden></div></div>
+        <div class="planctl" id="planZoomRow">
+          <p class="note" style="flex:1 1 280px" id="planNote"></p>
+          <div class="btns zoomset" id="planZoom">
+            <button class="btn small" id="planZoom50" data-z="50" type="button">50–100</button>
+            <button class="btn small" id="planZoom0" data-z="0" type="button">0–100</button>
+          </div>
+        </div>
+        <div id="gridWrap" class="instrument">
+          <h3 class="groupl" style="margin:8px 0 0" id="gridH"></h3>
+          <div class="tablewrap"><table class="grid"><thead id="gridHead"></thead><tbody id="gridBody"></tbody></table></div>
+          <p class="note" id="gridNote"></p>
+        </div>
+      </section>
+
+      <section class="instrument" id="leftSec">
+        <h2>Everything still left</h2>
+        <div class="verdict">
+          <p class="big" id="leftBig"></p>
+          <p class="sub" id="leftSub"></p>
+        </div>
+        <div class="sim" style="max-width:520px"><label for="leftR">Average on what's left (%)</label><input type="range" id="leftR" min="0" max="100" step="0.5"><span class="mono" id="leftV"></span></div>
+        <div><div class="rangebar" id="rangeBar" aria-hidden="true"></div><div class="zaxisp"><span id="rangeLo"></span><span>Course grades you can still reach</span><span id="rangeHi"></span></div></div>
+        <div class="opt"><span class="groupl">Average needed on everything left</span><div class="needchips" id="leftNeeds"></div></div>
+        <div class="btns"><button class="btn" id="leftApply" type="button">Set everything left to this average</button></div>
+      </section>
+
+      <section class="instrument" id="allSec">
+        <h2>All your scores at once</h2>
+        <div class="planctl">
+          <div class="btns" id="allView">
+            <button class="btn" id="allV1" data-v="swing" type="button">What moves my grade</button>
+            <button class="btn" id="allV2" data-v="paths" type="button">Every score on one chart</button>
+          </div>
+          <div class="btns" id="allSwing">
+            <button class="btn small" id="allD5" data-d="5" type="button">±5</button>
+            <button class="btn small" id="allD10" data-d="10" type="button">±10</button>
+            <button class="btn small" id="allD0" data-d="0" type="button">0 to 100</button>
+          </div>
+        </div>
+        <p class="sub allread" id="allRead"></p>
+        <div id="allBox"><svg id="allChart" role="img" aria-label="Chart comparing every ungraded score"></svg><div class="tip" id="allTip" hidden></div></div>
+        <div class="key" id="allKey"><span style="--swatch: var(--accent)" id="allGoal"></span><span style="--swatch: var(--fg3)">Falls short</span><span style="--swatch: var(--fg)">Your scores now</span></div>
+        <p class="note" id="allNote"></p>
+      </section>
+
+      <section class="instrument" id="penSec">
+        <h2>Deductions</h2>
+        <div class="verdict"><p class="big" id="penBig"></p><p class="sub" id="penSub"></p></div>
+        <div class="pengrid" id="penTables"></div>
+      </section>
+
+      <section class="instrument" id="mSection">
+        <h2 id="mH"></h2>
+        <div class="verdict">
+          <p class="big" id="mBig"></p>
+          <p class="sub" id="mSub"></p>
+          <p class="sub" id="mWhy"></p>
+        </div>
+        <div id="mZones">
+          <div class="zones"><div class="zlayer" aria-hidden="true"><div><span class="zline" id="zLine"></span></div></div><div id="zRows" style="display:grid;gap:6px"></div></div>
+          <div class="zaxis" style="margin-top:6px"><span></span><div><span>0</span><span id="zAxisL"></span><span>100</span></div><span></span></div>
+        </div>
+        <div class="key" id="mKey"><span class="off" style="--swatch: var(--sunk)">No effect on your grade</span><span style="--swatch: var(--accent)">Every point counts</span><span class="mark" id="mMark"></span></div>
+        <p class="note" id="mNote"></p>
+      </section>
+
+      <section class="instrument" id="needSec">
+        <h2>What you need for each grade</h2>
+        <p class="lede" id="needLede"></p>
+        <div class="tablewrap"><table>
+          <thead id="needHead"></thead>
+          <tbody id="need"></tbody>
+        </table></div>
+        <p class="note" id="needNote"></p>
+      </section>
+
+      <section class="instrument">
+        <h2>Where your points come from</h2>
+        <p class="lede">Each column's width is its weight and its height is your score, so the filled area is your course grade. The number under each column is what you've lost there.</p>
+        <div>
+          <div class="mekko" id="mekko"></div>
+          <div class="mlabels" id="mlabels"></div>
+        </div>
+        <div class="key" id="mekKey"></div>
+      </section>
+
+      <section class="instrument" id="mapSec">
+        <h2 id="mapH"></h2>
+        <div class="split">
+          <div class="chart" id="mapBox">
+            <canvas id="map" role="img" aria-label="Map of course letter grade for every pair of scores. Drag to set both scores."></canvas>
+            <div class="tip" id="mapTip" hidden></div>
+          </div>
+          <div class="side">
+            <p>Drag anywhere to set both scores. The dot is where you are now.</p>
+            <p id="mapRead"></p>
+            <p id="mapFlat"></p>
+            <div class="btns zoomset" id="zoom">
+              <button class="btn small" id="zoom50" data-z="50" type="button">50–100</button>
+              <button class="btn small" id="zoom0" data-z="0" type="button">0–100</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="instrument" id="paySec">
+        <h2>Payoff curve</h2>
+        <p class="lede">How your course grade moves with one score while the rest stay put. Kinks show where the rules kick in.</p>
+        <div class="btns" id="payoffKeys"></div>
+        <div id="payoffBox"><svg id="payoff" role="img" aria-label="Line chart of course grade against the selected score"></svg><div class="tip" id="payTip" hidden></div></div>
+        <p class="note" id="payRead"></p>
+      </section>
+
+      <section class="instrument" id="leverSec">
+        <h2>What one more point is worth</h2>
+        <p class="lede">Course points gained from the next point on each score. Use this to decide where effort pays most.</p>
+        <div class="bars" id="lever"></div>
+      </section>
+
+      <section class="instrument" id="luckSec">
+        <h2>Luck simulator</h2>
+        <p class="lede" id="luckLede"></p>
+        <div class="sim">
+          <label for="sigma">Exam swing</label>
+          <input type="range" id="sigma" min="0" max="15" step="0.5" value="6">
+          <span class="mono" id="sigmaV">±6</span>
+        </div>
+        <div class="bars" id="luck"></div>
+        <p class="note" id="luckRead"></p>
+      </section>
+
+      <section class="rules">
+        <h2>The rules used here</h2>
+        <ul id="rulesList"></ul>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+/* LOGIC START */
+const TOK = ['gAp', 'gA', 'gAm', 'gBp', 'gB', 'gBm', 'gCp', 'gC', 'gCm', 'gDp', 'gD', 'gDm', 'gF'];
+const EPS = 1e-9;
+function allItems(c) { return c.cats.flatMap(x => x.items); }
+function scorable(c) { return allItems(c).map(i => i.k).concat(c.link ? [c.link.k] : []); }
+function catOf(c, k) { return c.cats.find(x => x.items.some(i => i.k === k)); }
+function reading(c, read) {
+  const u = c.curve; if (!u) return null;
+  if (u.mult == null) return 'plus'; if (u.plus == null) return 'mult';
+  return read === 'plus' ? 'plus' : 'mult';
+}
+function scaleUp(x, c, read) {
+  const v = reading(c, read) === 'plus' ? x + c.curve.plus : x * c.curve.mult;
+  return Math.min(c.curve.cap, v);
+}
+function letterIdx(c, x) {
+  const y = x + (c.round || 0) / 2;
+  for (let i = 0; i < c.scale.length; i++) if (y + EPS >= c.scale[i][1]) return i;
+  return c.scale.length - 1;
+}
+const clamp100 = v => Math.max(0, Math.min(100, v));
+/* Final-section classes: the overall Final slider shifts every section by the same amount. */
+function secShift(c, s) {
+  if (!c.link) return 0;
+  return s[c.link.k] - c.link.items.reduce((a, k) => a + s[k], 0) / c.link.items.length;
+}
+function course(c, s, read) {
+  const e = {}, w = {}, dropped = [], swaps = [], shift = secShift(c, s);
+  for (const cat of c.cats) for (const it of cat.items) {
+    const x = c.link && c.link.items.includes(it.k) ? clamp100(s[it.k] + shift) : s[it.k];
+    e[it.k] = cat.curved && c.curve ? scaleUp(x, c, read) : x;
+  }
+  if (c.bestOf) {
+    const mids = c.cats.find(x => x.id === c.bestOf.cat).items, secs = c.cats.find(x => x.id === c.bestOf.by).items;
+    mids.forEach((m, i) => { if (e[secs[i].k] > e[m.k]) { e[m.k] = e[secs[i].k]; swaps.push(m.k); } });
+  }
+  let lo = null, orig = 0, replaced = false;
+  if (c.replace) {
+    const items = c.cats.find(x => x.id === c.replace.cat).items;
+    lo = items[0].k;
+    for (const it of items) if (e[it.k] < e[lo]) lo = it.k;
+    orig = e[lo];
+    if (e[c.replace.by] > orig) { replaced = true; e[lo] = e[c.replace.by]; swaps.push(lo); }
+  }
+  let sum = 0, W = 0;
+  for (const cat of c.cats) {
+    W += cat.weight;
+    const keys = cat.items.map(i => i.k), n = Math.min(cat.drop || 0, keys.length - 1);
+    const order = n ? keys.slice().sort((a, b) => e[a] - e[b]) : keys;
+    const gone = new Set(order.slice(0, n));
+    let wsum = 0;
+    for (const it of cat.items) if (!gone.has(it.k)) wsum += it.w || 1;
+    for (const it of cat.items) {
+      if (gone.has(it.k)) { w[it.k] = 0; dropped.push(it.k); }
+      else { const each = cat.weight * (it.w || 1) / wsum; w[it.k] = each; sum += each * e[it.k]; }
+    }
+  }
+  for (const k in w) w[k] = w[k] * 100 / W;
+  const base = sum / W;
+  let ded = 0, failed = false;
+  for (const p of c.pens || []) {
+    const n = s[p.k] || 0;
+    if (p.steps) { let d = 0; for (const [t, v] of p.steps) if (n >= t) { if (v === 'F') failed = true; else d = v; } ded += d; }
+    else ded += p.per * Math.max(0, n - p.free);
+  }
+  if (c.penCap != null && s.pen_cap) ded = Math.min(ded, c.penCap);
+  return { total: failed ? 0 : Math.max(0, base - ded), base, ded, failed, e, w, lo, orig, replaced, dropped, swaps };
+}
+/* Lowest value of the listed scores, moved together, that reaches a cutoff. 0 = any, null = impossible. */
+function solveExact(c, s, keys, cut, read) {
+  const target = cut - (c.round || 0) / 2;
+  const at = v => { const z = { ...s }; for (const k of keys) z[k] = v; return course(c, z, read).total; };
+  if (at(0) + EPS >= target) return 0;
+  if (at(100) + EPS < target) return null;
+  let lo = 0, hi = 100;
+  for (let i = 0; i < 60; i++) { const mid = (lo + hi) / 2; if (at(mid) + EPS >= target) hi = mid; else lo = mid; }
+  return hi;
+}
+function solve(c, s, keys, cut, read) {
+  const v = solveExact(c, s, keys, cut, read);
+  return v === null || v === 0 ? v : Math.min(100, Math.ceil(v * 10 - 1e-6) / 10);
+}
+function nextPoint(c, s, key, read) {
+  if (s[key] >= 100) return 0;
+  const z = { ...s }; z[key] = Math.min(100, s[key] + 1);
+  return course(c, z, read).total - course(c, s, read).total;
+}
+/* Highest score on key that still leaves the course total where a 0 would. Found by search so it covers any rule set. */
+function flatTop(c, s, key, read) {
+  const at = v => course(c, { ...s, [key]: v }, read).total, base = at(0);
+  if (at(100) <= base + 1e-9) return 100;
+  let lo = 0, hi = 100;
+  for (let i = 0; i < 55; i++) { const mid = (lo + hi) / 2; if (at(mid) <= base + 1e-9) lo = mid; else hi = mid; }
+  return Math.round(lo * 1e5) / 1e5;
+}
+/* Grades may not round, so a display must never round a score up across a cutoff. */
+function floor2(x) { return (Math.floor(x * 100 + 1e-7) / 100).toFixed(2); }
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function simulate(c, s, keys, sigma, read, n) {
+  const rnd = mulberry(20261113), counts = new Array(c.scale.length).fill(0);
+  const clip = v => Math.max(0, Math.min(100, v));
+  for (let i = 0; i < n; i++) {
+    const z = { ...s };
+    for (const k of keys) {
+      const u = 1 - rnd(), v = rnd();
+      z[k] = clip(s[k] + sigma * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v));
+    }
+    counts[letterIdx(c, course(c, z, read).total)]++;
+  }
+  return counts.map(x => x / n);
+}
+/* Every class, saved or pasted, passes through here. Pasted codes are untrusted. */
+function normCfg(x) {
+  if (!x || typeof x !== 'object') throw new Error('That class data could not be read.');
+  const str = (v, n) => String(v ?? '').slice(0, n).trim();
+  const num = (v, a, b, d) => { const n = parseFloat(v); return Number.isFinite(n) ? Math.max(a, Math.min(b, n)) : d; };
+  const name = str(x.name, 60);
+  if (!name) throw new Error('Give the class a name.');
+  if (!Array.isArray(x.cats) || !x.cats.length || x.cats.length > 20) throw new Error('Add at least one grade category.');
+  const seen = new Set();
+  const cats = x.cats.map((cat, ci) => {
+    const nm = str(cat.name, 40);
+    if (!nm) throw new Error('Every category needs a name.');
+    const id = /^[\w-]{1,40}$/.test(cat.id || '') ? cat.id : 'cat' + ci;
+    if (!Array.isArray(cat.items) || !cat.items.length || cat.items.length > 30) throw new Error(`${nm} needs between 1 and 30 scores.`);
+    const items = cat.items.map((it, i) => {
+      const k = /^[\w-]{1,40}$/.test(it.k || '') ? it.k : `${id}_${i}`;
+      if (seen.has(k)) throw new Error('Two scores share an internal name. Remove one and add it again.');
+      seen.add(k);
+      return { k, n: str(it.n, 40) || nm, sh: str(it.sh, 8) || nm.slice(0, 5), exam: !!it.exam, w: num(it.w, .01, 1000, 1) };
+    });
+    const out = cat.outOf == null || cat.outOf === '' ? null : num(cat.outOf, 1, 100000, null);
+    return { id, name: nm, weight: num(cat.weight, 0, 100, 0), drop: Math.round(num(cat.drop, 0, items.length - 1, 0)), curved: !!cat.curved, outOf: out, items };
+  });
+  if (new Set(cats.map(k => k.id)).size !== cats.length) throw new Error('Two categories share an internal name.');
+  if (!(cats.reduce((a, k) => a + k.weight, 0) > 0)) throw new Error('Category weights must add up to more than 0.');
+  const keys = cats.flatMap(k => k.items.map(i => i.k));
+  if (keys.length < 2) throw new Error('A class needs at least two scores.');
+  let curve = null;
+  if (x.curve && (x.curve.mult != null || x.curve.plus != null)) {
+    curve = { mult: x.curve.mult == null ? null : num(x.curve.mult, 0, 10, 1), plus: x.curve.plus == null ? null : num(x.curve.plus, 0, 100, 0), cap: num(x.curve.cap, 1, 200, 100) };
+  }
+  let replace = null;
+  if (x.replace && x.replace.by && x.replace.cat) {
+    const cat = cats.find(k => k.id === x.replace.cat);
+    if (cat && keys.includes(x.replace.by) && !cat.items.some(i => i.k === x.replace.by)) replace = { by: x.replace.by, cat: cat.id };
+    else throw new Error('The replacing score has to be outside the category it replaces in.');
+  }
+  if (!Array.isArray(x.scale) || x.scale.length < 2) throw new Error('The grade scale needs at least two grades.');
+  const scale = x.scale.map(r => [str(r[0], 6), num(r[1], 0, 200, NaN)]);
+  if (scale.some(r => !r[0] || !Number.isFinite(r[1]))) throw new Error('Each grade scale line needs a letter and a number.');
+  scale.sort((a, b) => b[1] - a[1]);
+  if (new Set(scale.map(r => r[1])).size !== scale.length) throw new Error('Two grades share the same minimum.');
+  if (scale.length > 20) throw new Error('The grade scale can have at most 20 grades.');
+  scale[scale.length - 1][1] = 0;
+  let bestOf = null, link = null;
+  if (x.bestOf && x.bestOf.cat && x.bestOf.by) {
+    const m = cats.find(k => k.id === x.bestOf.cat), f = cats.find(k => k.id === x.bestOf.by);
+    if (!m || !f || m === f || m.items.length !== f.items.length) throw new Error('For a better-of rule, both categories need the same number of scores.');
+    bestOf = { cat: m.id, by: f.id };
+    link = { k: f.id + '_all', n: f.name, sh: f.items.length > 1 ? f.name.slice(0, 5) : f.items[0].sh, items: f.items.map(i => i.k) };
+    keys.push(link.k);
+  }
+  const pens = [];
+  for (const [i, p] of (Array.isArray(x.pens) ? x.pens : []).slice(0, 6).entries()) {
+    const nm = str(p.name, 40); if (!nm) continue;
+    const k = /^pen_[\w-]{1,30}$/.test(p.k || '') ? p.k : 'pen_' + i, step = num(p.step, .1, 10, 1);
+    if (Array.isArray(p.steps)) {
+      const steps = p.steps.map(r => [num(r[0], 0, 1000, 0), r[1] === 'F' ? 'F' : num(r[1], 0, 100, 0)]).sort((a, b) => a[0] - b[0]);
+      if (!steps.length) continue;
+      pens.push({ k, name: nm, step, steps, max: steps[steps.length - 1][0] });
+    } else pens.push({ k, name: nm, step, per: num(p.per, 0, 100, 0), free: num(p.free, 0, 1000, 0), max: num(p.free, 0, 1000, 0) + 10 });
+  }
+  const penCap = x.penCap == null || x.penCap === '' ? null : num(x.penCap, 0, 100, null);
+  const ex = keys.filter(k => cats.some(c => c.items.some(i => i.k === k && i.exam)));
+  let focus = Array.isArray(x.focus) ? x.focus.filter(k => keys.includes(k)) : [];
+  if (focus.length !== 2 || focus[0] === focus[1]) {
+    const pool = ex.length >= 2 ? ex : keys;
+    focus = [pool[pool.length - 2], pool[pool.length - 1]];
+  }
+  const notes = (Array.isArray(x.notes) ? x.notes : []).slice(0, 12).map(r => [str(r[0], 40), str(r[1], 400)]).filter(r => r[0] || r[1]);
+  const dates = (Array.isArray(x.dates) ? x.dates : []).slice(0, 12).map(d => [str(d[0], 40), str(d[1], 40)]).filter(d => d[0] || d[1]);
+  const round = [0, .5, 1].includes(+x.round) ? +x.round : 0;
+  return { id: /^[\w-]{1,40}$/.test(x.id || '') ? x.id : '', name, title: str(x.title, 80), semester: str(x.semester, 30), prof: str(x.prof, 60), univ: str(x.univ, 60), source: str(x.source, 120), tagline: str(x.tagline, 300), dates, notes, cats, replace, bestOf, link, pens, penCap, slides: !!x.slides, curve, focus, scale, round };
+}
+/* Course total with one group of scores pushed down and up by d points, or across 0 to 100 when d is 0. */
+function swingRange(c, s, keys, d, read) {
+  const at = f => { const z = { ...s }; for (const k of keys) z[k] = f(s[k]); return course(c, z, read).total; };
+  return d ? [at(v => Math.max(0, v - d)), at(v => Math.min(100, v + d))] : [at(() => 0), at(() => 100)];
+}
+const CSV_HEAD = ['kind', 'name', 'value', 'weight', 'scores', 'drop', 'out_of', 'score_weights', 'scale_up', 'exam', 'score_names', 'step'];
+const CSV_SCALE = [['A+', 97], ['A', 93], ['A−', 90], ['B+', 87], ['B', 83], ['B−', 80], ['C+', 77], ['C', 73], ['C−', 70], ['D+', 67], ['D', 63], ['D−', 60], ['F', 0]];
+function parseCsv(text) {
+  const t = String(text).replace(/^﻿/, ''), first = t.split(/\r?\n/, 1)[0];
+  const sep = first.includes('\t') ? '\t' : first.split(';').length > first.split(',').length ? ';' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (q) {
+      if (ch === '"') { if (t[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch;
+    } else if (ch === '"' && !cell) q = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && t[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (q) throw new Error('A quote mark in the file was never closed.');
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+/* Turns a class CSV into a raw class. normCfg still checks the result. */
+function csvToCfg(text) {
+  if (String(text).length > 200000) throw new Error('That file is too big to be a class setup.');
+  const all = parseCsv(text).map((r, i) => ({ r, n: i + 1 })).filter(o => o.r.some(c => c.trim()));
+  if (!all.length) throw new Error('Paste a CSV or choose a file first.');
+  const head = all[0].r.map(h => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  if (!head.includes('kind') || !head.includes('name')) throw new Error('The first row needs column names, including kind and name. Copy the template to see the layout.');
+  const set = {}, cats = [], scale = [], dates = [], pens = [], notes = [];
+  const yes = (v, n) => {
+    if (/^(y|yes|true|1|x)$/i.test(v)) return true;
+    if (!v || /^(n|no|false|0)$/i.test(v)) return false;
+    throw new Error(`Row ${n}: use yes or no instead of "${v}".`);
+  };
+  const number = (v, n, what) => { const x = parseFloat(String(v).replace(/%$/, '')); if (!Number.isFinite(x)) throw new Error(`Row ${n}: ${what} needs a number, not "${v}".`); return x; };
+  for (const { r, n } of all.slice(1)) {
+    const g = h => { const j = head.indexOf(h); return j < 0 ? '' : (r[j] || '').trim(); };
+    const kind = g('kind').toLowerCase(), name = g('name'), value = g('value');
+    if (kind.startsWith('#')) continue;
+    if (!name) throw new Error(`Row ${n}: the name column is empty.`);
+    if (kind === 'setting') set[name.toLowerCase().replace(/[\s-]+/g, '_')] = { v: value, n };
+    else if (kind === 'date') dates.push([name, value]);
+    else if (kind === 'note') notes.push([name, value]);
+    else if (kind === 'grade') scale.push([name, number(value, n, name)]);
+    else if (kind === 'deduction') {
+      const step = g('step') ? number(g('step'), n, 'step') : 1, per = value.match(/^([\d.]+)\s+per\s+after\s+([\d.]+)$/i);
+      if (per) pens.push({ name, step, per: +per[1], free: +per[2] });
+      else pens.push({ name, step, steps: value.split(/[;,]/).map(p => {
+        const q = p.trim().match(/^([\d.]+)\s*=\s*(F|[\d.]+)$/i);
+        if (!q) throw new Error(`Row ${n}: write deductions like 4=5; 8=F or 5 per after 3.`);
+        return [+q[1], q[2].toUpperCase() === 'F' ? 'F' : +q[2]];
+      }) });
+    } else if (kind === 'category') {
+      const id = 'c' + cats.length, names = g('score_names').split(';').map(x => x.trim()).filter(Boolean);
+      const count = g('scores') ? Math.round(number(g('scores'), n, 'scores')) : names.length || 1;
+      if (count < 1 || count > 30) throw new Error(`Row ${n}: scores must be between 1 and 30.`);
+      if (names.length && names.length !== count) throw new Error(`Row ${n}: ${name} has ${count} scores but ${names.length} score names.`);
+      const iw = g('score_weights').split(/[;\s]+/).filter(Boolean).map(x => number(x, n, 'score_weights'));
+      if (iw.length && iw.length !== count) throw new Error(`Row ${n}: ${name} has ${count} scores but ${iw.length} score weights.`);
+      const sing = name.replace(/s$/i, ''), exam = yes(g('exam') || g('graded_box'), n);
+      const items = Array.from({ length: count }, (_, i) => {
+        const nm = names[i] || (count > 1 ? `${sing} ${i + 1}` : name), dig = nm.match(/(\d+)$/);
+        return { k: `${id}_${i}`, n: nm, sh: dig ? nm[0] + dig[1] : nm.slice(0, 5), exam, w: iw[i] || 1 };
+      });
+      cats.push({ id, name, weight: number(g('weight'), n, `${name} weight`), drop: g('drop') ? number(g('drop'), n, 'drop') : 0, curved: yes(g('scale_up'), n), outOf: g('out_of') ? number(g('out_of'), n, 'out_of') : null, items });
+    } else throw new Error(`Row ${n}: unknown kind "${g('kind')}". Use setting, category, grade, date, deduction or note.`);
+  }
+  if (!cats.length) throw new Error('Add at least one category row.');
+  const val = k => (set[k] ? set[k].v : '');
+  const low = t => t.trim().toLowerCase();
+  const findCat = o => { const c = cats.find(x => low(x.name) === low(o.v)); if (!c) throw new Error(`Row ${o.n}: no category is called "${o.v}".`); return c; };
+  let bestOf = null, replace = null, curve = null;
+  if (val('better_of_category') || val('better_of_with')) {
+    if (!set.better_of_category || !set.better_of_with) throw new Error('A better-of rule needs both better_of_category and better_of_with.');
+    bestOf = { cat: findCat(set.better_of_category).id, by: findCat(set.better_of_with).id };
+  }
+  const findItem = o => {
+    for (const c of cats) { const it = c.items.find(i => low(i.n) === low(o.v)); if (it && !(bestOf && c.id === bestOf.by && c.items.length > 1)) return it.k; }
+    if (bestOf) { const f = cats.find(x => x.id === bestOf.by); if (low(f.name) === low(o.v)) return f.id + '_all'; }
+    throw new Error(`Row ${o.n}: no score is called "${o.v}".`);
+  };
+  if (val('replace_with') || val('replace_in')) {
+    if (!set.replace_with || !set.replace_in) throw new Error('A replacement rule needs both replace_with and replace_in.');
+    replace = { by: findItem(set.replace_with), cat: findCat(set.replace_in).id };
+  }
+  const mult = val('scale_up_multiply'), plus = val('scale_up_add');
+  if (mult || plus) curve = { mult: mult ? number(mult, set.scale_up_multiply.n, 'scale_up_multiply') : null, plus: plus ? number(plus, set.scale_up_add.n, 'scale_up_add') : null, cap: val('scale_up_cap') ? number(val('scale_up_cap'), set.scale_up_cap.n, 'scale_up_cap') : 100 };
+  if (cats.some(c => c.curved) && !curve) throw new Error('A category has scale_up set to yes, so add a scale_up_multiply or scale_up_add setting.');
+  const focus = set.plan_first && set.plan_second ? [findItem(set.plan_first), findItem(set.plan_second)] : null;
+  if (scale.length && !scale.some(r => r[1] === 0)) scale.push(['F', 0]);
+  const rd = low(val('rounding')), rmap = { '': 0, none: 0, '0': 0, whole: 1, '1': 1, half: .5, '0.5': .5 };
+  if (!(rd in rmap)) throw new Error(`Row ${set.rounding.n}: rounding must be none, half or whole.`);
+  return {
+    name: val('class') || val('class_name') || val('name'), title: val('title'), semester: val('semester'), prof: val('professor') || val('prof'), univ: val('university'),
+    source: val('source'), tagline: val('description'), dates, notes, cats, replace, bestOf, curve, focus, pens,
+    penCap: val('deduction_limit'), slides: /^(y|yes|true|1|x)$/i.test(val('cutoffs_slide')), scale: scale.length ? scale : CSV_SCALE.map(r => r.slice()), round: rmap[rd]
+  };
+}
+function cfgToCsv(c) {
+  const rows = [CSV_HEAD], row = o => rows.push(CSV_HEAD.map(h => (o[h] ?? '') + ''));
+  const set = (name, value) => { if (value !== '' && value != null && value !== false) row({ kind: 'setting', name, value }); };
+  const itemName = k => { if (c.link && k === c.link.k) return c.link.n; const it = allItems(c).find(i => i.k === k); return it ? it.n : ''; };
+  set('class', c.name); set('title', c.title); set('semester', c.semester); set('professor', c.prof); set('university', c.univ); set('source', c.source); set('description', c.tagline);
+  if (c.replace) { set('replace_with', itemName(c.replace.by)); set('replace_in', c.cats.find(x => x.id === c.replace.cat).name); }
+  if (c.bestOf) { set('better_of_category', c.cats.find(x => x.id === c.bestOf.cat).name); set('better_of_with', c.cats.find(x => x.id === c.bestOf.by).name); }
+  if (c.curve) { set('scale_up_multiply', c.curve.mult); set('scale_up_add', c.curve.plus); set('scale_up_cap', c.curve.cap); }
+  set('plan_first', itemName(c.focus[0])); set('plan_second', itemName(c.focus[1]));
+  set('rounding', c.round === 1 ? 'whole' : c.round === .5 ? 'half' : 'none');
+  if (c.slides) set('cutoffs_slide', 'yes');
+  set('deduction_limit', c.penCap);
+  for (const d of c.dates || []) row({ kind: 'date', name: d[0], value: d[1] });
+  for (const x of c.cats) {
+    const sing = x.name.replace(/s$/i, ''), n = x.items.length, auto = x.items.every((it, i) => it.n === (n > 1 ? `${sing} ${i + 1}` : x.name));
+    row({ kind: 'category', name: x.name, weight: x.weight, scores: n, drop: x.drop || '', out_of: x.outOf ?? '', score_weights: x.items.every(i => (i.w || 1) === 1) ? '' : x.items.map(i => i.w).join(';'),
+      scale_up: x.curved ? 'yes' : '', exam: x.items.some(i => i.exam) ? 'yes' : '', score_names: auto ? '' : x.items.map(i => i.n).join(';') });
+  }
+  for (const r of c.scale) row({ kind: 'grade', name: r[0], value: r[1] });
+  for (const n of c.notes || []) row({ kind: 'note', name: n[0], value: n[1] });
+  for (const p of c.pens || []) row({ kind: 'deduction', name: p.name, value: p.steps ? p.steps.map(r => `${r[0]}=${r[1]}`).join('; ') : `${p.per} per after ${p.free}`, step: p.step === 1 ? '' : p.step });
+  return rows.map(r => r.map(v => /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n') + '\n';
+}
+/* LOGIC END */
+
+const CHEM = {
+  id: 'chem101', builtin: true, name: 'Chem 101', title: 'CHEM 101DL, sections 002 and 003', semester: 'Fall 2026', prof: 'Prof. Martinez', univ: 'Duke University', source: 'Fall 2026 syllabus, added Nov 2, 2026',
+  tagline: 'Add points drop by drop and watch your grade change color. Built for CHEM 101DL-002 and 003, Fall 2026, using the syllabus rules.',
+  dates: [['Withdraw by', 'Fri Nov 6'], ['Test 3', 'Fri Nov 13'], ['Final', 'Wed Dec 9']],
+  cats: [
+    { id: 'tests', name: 'Tests', weight: 40, drop: 0, items: [{ k: 't1', n: 'Test 1', sh: 'T1', exam: true }, { k: 't2', n: 'Test 2', sh: 'T2', exam: true }, { k: 't3', n: 'Test 3', sh: 'T3', exam: true }] },
+    { id: 'final', name: 'Final', weight: 20, drop: 0, items: [{ k: 'f', n: 'Final', sh: 'Final', exam: true }] },
+    { id: 'lab', name: 'Lab', weight: 20, drop: 0, items: [{ k: 'l', n: 'Lab', sh: 'Lab' }] },
+    { id: 'disc', name: 'Discussion', weight: 10, drop: 0, curved: true, items: [{ k: 'd', n: 'Discussion', sh: 'Disc' }] },
+    { id: 'mast', name: 'Mastering', weight: 10, drop: 0, curved: true, items: [{ k: 'm', n: 'Mastering', sh: 'HW' }] }
+  ],
+  replace: { by: 'f', cat: 'tests' }, curve: { mult: 1.1, plus: 10, cap: 100 }, focus: ['t3', 'f'],
+  scale: [['A+', 97], ['A', 93], ['A−', 90], ['B+', 87], ['B', 83], ['B−', 80], ['C+', 77], ['C', 73], ['C−', 70], ['D+', 67], ['D', 63], ['D−', 60], ['F', 0]],
+  round: 0,
+  curveLabel: 'How the 10% scale-up works',
+  rules: [
+    ['Weights:', '3 tests 40% total, Final 20%, Lab 20%, Discussion 10%, Mastering Chemistry 10%.'],
+    ['Replacement:', 'if your Final beats any test, it replaces your lowest test. It also still counts as the 20% Final.'],
+    ['Scale-up:', "Discussion and Mastering are each scaled up by 10%, capped at 100%. The syllabus doesn't spell out the math, so use the switch to see both readings. Enter your raw percent before the scale-up."],
+    ['Final score:', 'enter the scaled Final out of 100, since that is the number the syllabus uses.'],
+    ['Cutoffs:', "A+ 97, A 93, A− 90, B+ 87, B 83, B− 80, C+ 77, C 73, C− 70, D+ 67, D 63, D− 60, with no rounding. The syllabus doesn't list an F, so this page labels anything below 60 as F."],
+    ['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator, and Canvas or the instructors have the last word.']
+  ]
+};
+const CHEM_ST = { s: { t1: 84, t2: 78, t3: 82, f: 85, l: 88, d: 92, m: 95 }, graded: { t1: true, t2: true, t3: false, f: false, l: false, d: false, m: false }, mode: 'mult', touched: false, target: null, solveFor: 'f' };
+const NOPLUS = [['A', 93], ['A−', 90], ['B+', 87], ['B', 83], ['B−', 80], ['C+', 77], ['C', 73], ['C−', 70], ['D+', 67], ['D', 63], ['D−', 60], ['F', 0]];
+const series = (pre, sh, n, extra) => Array.from({ length: n }, (_, i) => ({ k: `${pre}${i + 1}`, n: `${sh[0]} ${i + 1}`, sh: `${sh[1]}${i + 1}`, ...extra }));
+const CS201 = {
+  id: 'cs201', builtin: true, name: 'Compsci 201', semester: 'Fall 2026', prof: 'Prof. Astrachan', univ: 'Duke University', source: 'Fall 2026 syllabus, added Nov 2, 2026',
+  tagline: 'Add points drop by drop and watch your grade change color. Each midterm keeps the better of itself and its Final section.', dates: [],
+  cats: [
+    { id: 'mid', name: 'Midterms', weight: 30, items: series('m', ['Midterm', 'M'], 3, { exam: true }) },
+    { id: 'fin', name: 'Final', weight: 14, items: series('s', ['Final section', 'F'], 3, {}) },
+    { id: 'proj', name: 'Projects', weight: 26, items: series('p', ['Project', 'P'], 8, { exam: true }).map((it, i) => ({ ...it, w: [1, 1, 2, 2, 2, 3, 3, 3][i] })) },
+    { id: 'apt', name: 'APTs', weight: 8, items: [{ k: 'apt', n: 'APTs', sh: 'APT', exam: true }] },
+    { id: 'aptq', name: 'APT Quizzes', weight: 8, items: series('q', ['APT Quiz', 'Q'], 2, { exam: true }) },
+    { id: 'eng', name: 'Engagement', weight: 7, outOf: 280, items: [{ k: 'eng', n: 'Engagement', sh: 'Eng', exam: true }] },
+    { id: 'disc', name: 'Discussion', weight: 7, outOf: 14, items: [{ k: 'disc', n: 'Discussion', sh: 'Disc', exam: true }] }
+  ],
+  bestOf: { cat: 'mid', by: 'fin' }, focus: ['m3', 'fin_all'], slides: true,
+  scale: [['A', 95], ['A−', 90], ['B+', 87], ['B', 83], ['B−', 80], ['C+', 77], ['C', 73], ['C−', 70], ['D+', 67], ['D', 63], ['D−', 60], ['F', 0]], round: 0,
+  defaults: { graded: { m1: true }, s: { eng: 100, disc: 100 } },
+  rules: [
+    ['Weights:', 'Projects 26%, three Midterms 30% (10% each), Final 14%, APTs 8%, APT Quizzes 8%, Engagement 7%, Discussion 7%.'],
+    ['Better of:', 'each midterm counts as the better of that midterm and its matching Final section. The Final still counts 14% as is.'],
+    ['Final sections:', 'the syllabus does not say how the sections are weighted, so this page weights them equally. Check By section to enter them separately.'],
+    ['Projects:', 'the eight projects are weighted 1, 1, 2, 2, 2, 3, 3, 3. Late work inside 48 hours has no penalty, and up to a week late earns 80%, so enter the score after that penalty.'],
+    ['APT Quizzes:', 'the syllabus gives 8% for the two quizzes, so this page splits them equally.'],
+    ['Engagement:', 'enter points. 280 is full credit, out of 480 available. Extra points may help near a cutoff but are not guaranteed, so they add nothing here.'],
+    ['Discussion:', 'enter sessions earned out of 14. In person is full credit, and the online form alone is half. Three absences are allowed for the attendance part, so check how those were credited.'],
+    ['Cutoffs:', 'A 95, A− 90, B+ 87, B 83, B− 80, C+ 77, C 73, C− 70, D+ 67, D 63, D− 60. The syllabus says the scale may slide down but will not go up, so use the slider to test that. It also says the A/A− cutoffs are not fixed.'],
+    ['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator.']
+  ]
+};
+const STA198 = {
+  id: 'sta198', builtin: true, name: 'STA 198', title: 'STA 198CNL, Intro to Global Health Data Science', semester: 'Fall 2026', prof: 'Yue Jiang', univ: 'Duke University', source: 'Course policies page, added Nov 2, 2026',
+  tagline: 'Add points drop by drop and watch your grade change color. Your exam grade is your best three of four.',
+  dates: [['Midterm 2', 'Mon Nov 2'], ['Midterm 3', 'Wed Dec 2'], ['Project 3', 'Wed Dec 2'], ['Optional exam', 'Sun Dec 13']],
+  cats: [
+    { id: 'exam', name: 'Exams', weight: 75, drop: 1, items: [...series('m', ['Midterm', 'M'], 3, { exam: true }), { k: 'opt', n: 'Optional exam', sh: 'Opt', exam: true }] },
+    { id: 'proj', name: 'Projects', weight: 15, items: series('p', ['Project', 'P'], 3, { exam: true }) },
+    { id: 'hw', name: 'Homework', weight: 10, drop: 1, items: series('h', ['Homework', 'H'], 9, { exam: true }) }
+  ],
+  focus: ['opt', 'm3'], slides: true, scale: NOPLUS, round: 0,
+  defaults: { graded: { m1: true }, s: { opt: 0 } },
+  rules: [
+    ['Weights:', 'Exams 75%, Projects 15%, Homework 10%. Labs and participation earn no credit.'],
+    ['Exams:', 'your exam grade is the average of your three highest scores among the three midterms and the optional three-hour exam. Leave the optional exam at 0 if you skip it, and it drops out on its own. A missed exam counts as 0.'],
+    ['Homework:', 'nine assignments with the lowest dropped. There is a 24-hour grace period, and after that the score is 0.'],
+    ['Projects:', 'the page gives 15% for three projects with no split, so this page weights them equally.'],
+    ['Cutoffs:', 'A 93, A− 90, B+ 87, B 83, B− 80, C+ 77, C 73, C− 70, D+ 67, D 63, D− 60, F below 60. There is no curve, and these are guaranteed minimums, so the slider shows what a lower cutoff would do. The page says nothing about rounding, so none is applied.'],
+    ['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator.']
+  ]
+};
+const W120 = {
+  id: 'w120', builtin: true, name: 'Writing 120', title: 'WRITING 120.11CN, Avoiding Vector-Borne Diseases', semester: 'Fall 2026', prof: 'Dr. Cary Moskovitz', univ: 'Duke University', source: 'Fall 2026 syllabus, added Nov 2, 2026',
+  tagline: 'Add points drop by drop and watch your grade change color. Your final grade is your base grade minus any deductions.', dates: [],
+  cats: [
+    { id: 'mini', name: 'Mini Research Proposal', weight: 3, outOf: 3, items: [{ k: 'mini', n: 'Mini Proposal', sh: 'Mini', exam: true }] },
+    { id: 'ar1', name: 'Article Review 1', weight: 20, outOf: 20, items: [{ k: 'ar1', n: 'Article Review 1', sh: 'AR1', exam: true }] },
+    { id: 'ar2', name: 'Article Review 2', weight: 32, outOf: 32, items: [{ k: 'ar2', n: 'Article Review 2', sh: 'AR2', exam: true }] },
+    { id: 'com', name: 'Commentary', weight: 45, outOf: 45, items: [{ k: 'com', n: 'Commentary', sh: 'Comm', exam: true }] }
+  ],
+  focus: ['ar2', 'com'], scale: NOPLUS, round: 0, penCap: 10,
+  pens: [
+    { k: 'pen_abs', name: 'Absences', step: .5, steps: [[4, 5], [6, 15], [8, 'F']] },
+    { k: 'pen_late', name: 'Late days', step: 1, per: 5, free: 3 }
+  ],
+  defaults: { graded: { mini: true, ar1: true }, s: { mini: 100, pen_cap: 0 } },
+  rules: [
+    ['Weights:', 'Mini Research Proposal 3%, Article Review 1 final 20%, Article Review 2 final 32%, Commentary final 45%. First drafts are ungraded.'],
+    ['Absences:', '3 or fewer cost nothing, 4 to 5 cost 5 points, 6 to 7 cost 15 points, and 8 or more fails the course. Each late arrival counts as half an absence.'],
+    ['Late days:', 'you get 3 grace days total. After that, final versions lose 5 points per day. This page counts only days past the 3 grace days, since the syllabus wording could also be read as counting all of them.'],
+    ['Deduction limit:', 'the syllabus says deductions max out at 10 points, but its table lists 15 for 6 to 7 absences. The limit is off by default so you see the bigger number. Use the switch to see the other reading.'],
+    ['Cutoffs:', 'the syllabus gives no number scale, so these standard cutoffs are an assumption: A 93, A− 90, B+ 87, B 83, B− 80, C+ 77, C 73, C− 70, D+ 67, D 63, D− 60.'],
+    ['Semester:', 'the syllabus header says Fall 2027, which looks like a typo, since its file name and the course are Fall 2026.'],
+    ['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator.']
+  ]
+};
+const BUILTIN = {};
+for (const raw of [CHEM, CS201, STA198, W120]) BUILTIN[raw.id] = { ...normCfg(raw), builtin: true, rules: raw.rules, curveLabel: raw.curveLabel, defaults: raw.defaults };
+const PLUSMINUS = CHEM.scale.map(r => r.slice());
+const PLAIN = [['A', 90], ['B', 80], ['C', 70], ['D', 60], ['F', 0]];
+const KEY = 'grade-titrator-v2', OLDKEY = 'chem101-titrator-v1';
+const clone = o => JSON.parse(JSON.stringify(o));
+const $ = id => document.getElementById(id);
+const esc = t => String(t).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = v => (Math.round(v * 10) / 10).toString();
+
+/* Saved state: one record per viewer. */
+function blankStore() { return { v: 2, active: 'chem101', classes: {}, order: [], scores: {}, savedAt: 0 }; }
+function cleanStore(raw) {
+  const out = blankStore();
+  if (!raw || typeof raw !== 'object') return out;
+  for (const id of Array.isArray(raw.order) ? raw.order : []) {
+    if (BUILTIN[id] || !/^[\w-]{1,40}$/.test(id) || !raw.classes || !raw.classes[id]) continue;
+    try { const c = normCfg({ ...raw.classes[id], id }); out.classes[id] = c; out.order.push(id); } catch (e) {}
+  }
+  if (raw.scores && typeof raw.scores === 'object') for (const id of Object.keys(raw.scores)) if (BUILTIN[id] || out.classes[id] || /^pub_[\w-]{1,40}$/.test(id)) out.scores[id] = raw.scores[id];
+  out.wanted = /^pub_[\w-]{1,40}$/.test(raw.active || '') ? raw.active : null;
+  out.active = BUILTIN[raw.active] || out.classes[raw.active] ? raw.active : 'chem101';
+  out.savedAt = Number.isFinite(raw.savedAt) ? raw.savedAt : 0;
+  return out;
+}
+let store = blankStore(), remote = null, remoteTimer = null;
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) store = cleanStore(JSON.parse(raw));
+  else {
+    /* Scores typed into the first version of this page carry over. */
+    const old = localStorage.getItem(OLDKEY);
+    if (old) store.scores.chem101 = JSON.parse(old);
+  }
+} catch (e) {}
+function save() {
+  store.savedAt = Date.now(); delete store.wanted;
+  const text = JSON.stringify(store);
+  try { localStorage.setItem(KEY, text); } catch (e) {}
+  if (remote) { clearTimeout(remoteTimer); remoteTimer = setTimeout(() => { remote.set({ json: JSON.stringify(store), savedAt: store.savedAt }).catch(() => {}); }, 900); }
+}
+function getCfg(id) { return BUILTIN[id] || store.classes[id] || BUILTIN.chem101; }
+function defaultSt(c) {
+  if (c.id === 'chem101') return { ...clone(CHEM_ST), slide: 0, split: false };
+  const s = {}, graded = {}, dz = c.defaults || {};
+  for (const k of scorable(c)) s[k] = dz.s && k in dz.s ? dz.s[k] : 85;
+  if (c.link && dz.s) for (const k of c.link.items) s[k] = s[c.link.k];
+  for (const it of allItems(c)) graded[it.k] = !!(dz.graded && dz.graded[it.k]);
+  if (c.link) graded[c.link.k] = false;
+  for (const p of c.pens || []) s[p.k] = 0;
+  if (c.penCap != null) s.pen_cap = dz.s && 'pen_cap' in dz.s ? dz.s.pen_cap : 1;
+  return { s, graded, mode: 'mult', touched: false, target: null, solveFor: c.focus[1], slide: 0, split: false };
+}
+function stFor(c, raw) {
+  const d = defaultSt(c);
+  if (!raw || typeof raw !== 'object') return d;
+  const out = { ...d, ...raw, s: { ...d.s }, graded: { ...d.graded } };
+  for (const k in d.s) { const v = raw.s && raw.s[k]; if (Number.isFinite(v)) out.s[k] = Math.max(0, Math.min(100, v)); }
+  for (const k in d.graded) if (raw.graded && k in raw.graded) out.graded[k] = !!raw.graded[k];
+  if (!c.focus.includes(out.solveFor)) out.solveFor = c.focus[1];
+  out.touched = !!raw.touched;
+  out.scope = raw.scope === 'pair' ? 'pair' : 'all';
+  out.pick = Array.isArray(raw.pick) ? raw.pick.filter(k => k in d.s) : null;
+  return out;
+}
+
+let C, BASE, st, CUTS, NAME, WT, ITEMS, INPUTS, OUT, SEC, leftAvg = null;
+let payKey, zoom = 50;
+const planOther = () => st.solveFor === C.focus[1] ? C.focus[0] : C.focus[1];
+const free = () => C.focus.filter(k => !st.graded[k]);
+const pool = () => {
+  const open = INPUTS.filter(i => !SEC.has(i.k) && !st.graded[i.k]);
+  return [...open.filter(i => i.exam), ...open.filter(i => !i.exam)].map(i => i.k);
+};
+const scopeKeys = () => st.scope === 'pair' ? free() : pool();
+/* Keeps the planned pair on ungraded scores. Graded scores drop out on their own. */
+function syncPair(force) {
+  const P = pool(), keep = [];
+  for (const k of [...(st.pick || []), ...BASE.focus, ...P]) if (P.includes(k) && !keep.includes(k) && keep.length < 2) keep.push(k);
+  for (const k of [...(st.pick || []), ...BASE.focus, ...INPUTS.map(i => i.k).filter(k => !SEC.has(k))]) if (!keep.includes(k) && keep.length < 2) keep.push(k);
+  if (keep.includes(BASE.focus[0]) && keep.includes(BASE.focus[1]) && !st.pick) { keep[0] = BASE.focus[0]; keep[1] = BASE.focus[1]; }
+  const sig = P.join('|');
+  const changed = force || keep.join('|') !== C.focus.join('|') || sig !== syncPair.sig;
+  syncPair.sig = sig; st.pair = keep;
+  if (changed) { C.focus = keep; buildFocus(); }
+  if (!C.focus.includes(st.solveFor)) st.solveFor = C.focus[1];
+}
+const onName = k => /\d$/.test(NAME[k]) ? NAME[k] : 'the ' + NAME[k];
+const article = g => (/^[AEFI][+−-]?$/.test(g) ? 'an ' : 'a ') + g;
+const bandVar = i => `var(--${CUTS[i][2]})`;
+const total = () => course(C, st.s, st.mode).total;
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve'];
+const singular = n => n.replace(/s$/i, '').toLowerCase();
+const pct = v => (Math.round(v * 10) / 10) + '%';
+
+function useClass(id) {
+  BASE = getCfg(id); C = clone(BASE); C.builtin = BASE.builtin; store.active = C.id;
+  st = stFor(C, store.scores[C.id]);
+  store.scores[C.id] = st;
+  const n = C.scale.length;
+  CUTS = C.scale.map((r, i) => [r[0], r[1], TOK[n === 1 ? 0 : Math.round(i * 12 / (n - 1))]]);
+  ITEMS = allItems(C);
+  SEC = new Set(C.link ? C.link.items : []);
+  INPUTS = ITEMS.slice();
+  if (C.link) INPUTS.splice(INPUTS.findIndex(i => i.k === C.link.items[0]), 0, { k: C.link.k, n: C.link.n, sh: C.link.sh, exam: true, link: true });
+  NAME = Object.fromEntries(INPUTS.map(i => [i.k, i.n]));
+  WT = {}; OUT = {};
+  for (const cat of C.cats) {
+    const tot = cat.items.reduce((a, i) => a + (i.w || 1), 0), kept = cat.items.length - (cat.drop || 0);
+    for (const it of cat.items) { WT[it.k] = cat.weight * (it.w || 1) / (cat.drop ? (tot / cat.items.length) * kept : tot); if (cat.outOf) OUT[it.k] = cat.outOf; }
+  }
+  if (C.link) WT[C.link.k] = C.cats.find(x => x.id === C.bestOf.by).weight;
+  payKey = C.focus[1]; leftAvg = null;
+  buildClass();
+  syncPair(true);
+}
+
+function buildClass() {
+  const [a, b] = C.focus, A = NAME[a], B = NAME[b];
+  $('h1').textContent = `${C.name} Grade Titrator`;
+  $('meta').textContent = [C.title, C.semester, C.prof, C.univ].filter(Boolean).join(' · ');
+  $('source').textContent = C.source ? `Preset from: ${C.source}` : '';
+  $('tag').textContent = C.tagline || 'Add points drop by drop and watch your grade change color.';
+  $('dates').innerHTML = C.dates.map(d => `<span>${esc(d[0])} <b>${esc(d[1])}</b></span>`).join('');
+  $('dates').hidden = !C.dates.length;
+  fillClassSel();
+  $('classSel').value = C.id;
+  const rowHtml = (it, cat) => {
+    const k = esc(it.k), out = OUT[it.k], max = out || 100, step = out && out > 100 ? 1 : .5;
+    const w = it.link ? cat.weight : WT[it.k], sec = SEC.has(it.k);
+    const label = `${pct(w)}${cat.drop ? ' each' : ''}${out ? ` · out of ${out}` : ''}`;
+    return `<div class="row ${sec ? 'secrow' : ''}" id="row_${k}">
+    <div class="top"><label class="name" for="n_${k}">${esc(it.n)}</label><span class="wt">${label}</span>
+      ${it.link ? `<label class="gradedbox"><input type="checkbox" id="splitBox"> By section</label>` : ''}
+      ${sec ? '' : `<label class="gradedbox"><input type="checkbox" id="g_${k}" data-k="${k}"> Graded</label>`}</div>
+    <input type="range" id="r_${k}" data-k="${k}" min="0" max="${max}" step="${step}" aria-label="${esc(it.n)} score">
+    <input type="number" id="n_${k}" data-k="${k}" min="0" max="${max}" step="${step}" inputmode="decimal">
+    ${sec ? '' : `<p class="hint" id="hint_${k}" hidden></p>`}
+  </div>`;
+  };
+  $('rows').innerHTML = C.cats.map(cat => {
+    const isSec = C.bestOf && C.bestOf.by === cat.id;
+    if (isSec) return rowHtml(INPUTS.find(i => i.link), cat) + cat.items.map(it => rowHtml(it, cat)).join('');
+    if (cat.items.length < 4) return cat.items.map(it => rowHtml(it, cat)).join('');
+    const id = esc(cat.id), max = cat.outOf || 100;
+    return `<details class="catgrp" id="grp_${id}" ${cat.items.some(i => C.focus.includes(i.k)) ? 'open' : ''}><summary><b>${esc(cat.name)}</b><span class="wt">${pct(cat.weight)} · ${cat.items.length} scores${cat.drop ? ` · drop ${cat.drop}` : ''}</span><span class="num" id="avg_${id}"></span></summary>
+      <div class="row"><div class="top"><label class="name" for="bulk_${id}">Set all ungraded</label></div><input type="range" id="bulk_${id}" data-cat="${id}" min="0" max="${max}" step=".5" aria-label="Set every ungraded ${esc(cat.name)} score"></div>
+      ${cat.items.map(it => rowHtml(it, cat)).join('')}</details>`;
+  }).join('');
+  $('penBox').hidden = !C.pens.length;
+  $('pens').innerHTML = C.pens.map(p => `<div class="row"><div class="top"><label class="name" for="n_${esc(p.k)}">${esc(p.name)}</label></div>
+    <input type="range" id="r_${esc(p.k)}" data-p="${esc(p.k)}" min="0" max="${p.max}" step="${p.step}" aria-label="${esc(p.name)}">
+    <input type="number" id="n_${esc(p.k)}" data-p="${esc(p.k)}" min="0" max="${p.max}" step="${p.step}" inputmode="decimal"></div>`).join('')
+    + (C.penCap != null ? `<label class="gradedbox" style="margin:0"><input type="checkbox" id="penCapBox"> Limit deductions to ${C.penCap} points</label>` : '');
+  $('slideBox').hidden = !C.slides;
+  $('strip').style.gridTemplateColumns = `repeat(${CUTS.length}, 1fr)`;
+  $('strip').innerHTML = CUTS.map((c, i) => [c, i]).reverse().map(([c, i]) => `<span id="st${i}" style="background:${bandVar(i)}">${esc(c[0])}</span>`).join('');
+  $('goals').innerHTML = CUTS.slice(0, -1).map((c, i) => `<button class="btn goal" id="goal${i}" data-i="${i}" type="button" style="--band:${bandVar(i)}">${esc(c[0])}</button>`).join('');
+  const PRESETS = [['Rough', 65], ['Okay', 78], ['Solid', 88], ['Ace it', 97]];
+  $('presets').innerHTML = PRESETS.map(([n, v], i) => `<button class="btn" id="pre${i}" data-v="${v}" type="button">${n} (${v})</button>`).join('')
+    + `<button class="btn" id="preAvg" data-v="avg" type="button">My graded average</button>`;
+  const hasCurve = !!(C.curve && C.cats.some(x => x.curved)), both = hasCurve && C.curve.mult != null && C.curve.plus != null;
+  $('modesBox').hidden = !both;
+  if (both) {
+    $('modesL').textContent = C.curveLabel || 'How the scale-up works';
+    $('modeMult').textContent = `Score × ${C.curve.mult.toFixed(2)}`; $('modePlus').textContent = `Score + ${C.curve.plus}`;
+  }
+  const cl = C.round ? `Grades are rounded to the nearest ${C.round === 1 ? 'whole number' : 'half point'}, and the numbers here account for that.` : 'Grades are not rounded, so hit the cutoff exactly.';
+  $('needNote').innerHTML = `<b>Any</b> means you get that grade even with a 0 there. <b>&gt;100</b> means it's out of reach with your other scores as set. ${cl}`;
+  $('rulesList').innerHTML = (C.rules || genRules()).map(([h, t]) => `<li><strong>${esc(h)}</strong> ${esc(t)}</li>`).join('');
+  syncInputs();
+}
+function fillClassSel() {
+  const opt = id => { const g = getCfg(id); return `<option value="${esc(id)}">${esc([g.name, g.semester, g.prof].filter(Boolean).join(' · '))}</option>`; };
+  const mine = store.order.map(opt).join('');
+  $('classSel').innerHTML = `<optgroup label="Classes for everyone">${Object.keys(BUILTIN).map(opt).join('')}</optgroup>` + (mine ? `<optgroup label="My classes">${mine}</optgroup>` : '');
+  $('classSel').value = C.id;
+}
+function buildFocus() {
+  const [a, b] = C.focus, A = NAME[a], B = NAME[b];
+  $('planH').textContent = `Plan ${A} and ${onName(b)}`;
+  $('solveB').textContent = `Find my ${B}`; $('solveB').dataset.k = b;
+  $('solveA').textContent = `Find my ${A}`; $('solveA').dataset.k = a;
+  $('planNote').textContent = `The line is the ${B} you need at each ${A} score. Above it you reach your grade. A flat stretch means ${A} isn't changing what you need. Drag to set both scores.`;
+  $('gridH').textContent = `${B} needed, by ${A} score`;
+  $('gridNote').innerHTML = `Tap a number to set both scores and that grade. Shaded numbers match the one to their left, so a higher ${esc(A)} changed nothing there. <b>Any</b> means even a 0 on ${esc(onName(b))} works, and a dash means it's out of reach.`;
+  $('mH').textContent = `Does ${A} matter?`; $('zAxisL').textContent = `${A} score`; $('mMark').textContent = `Your ${A} now`;
+  $('mNote').textContent = `Tap a ${B} button to try that score.`;
+  $('mapH').textContent = `Grade map: ${A} × ${B}`;
+  const aCat = catOf(C, a), rule = (C.replace && aCat && aCat.id === C.replace.cat && C.replace.by === b) || (C.bestOf && aCat && aCat.id === C.bestOf.cat && C.link.k === b);
+  const dropsA = aCat && (aCat.drop || 0) > 0;
+  $('mapFlat').textContent = rule ? `Where a color edge runs flat, ${A} isn't changing your grade because ${onName(b)} is replacing it.`
+    : dropsA ? `Where a color edge runs flat, ${A} isn't changing your grade because it is being dropped.` : '';
+  const names = () => pool().map(k => `<option value="${esc(k)}">${esc(NAME[k])}</option>`).join('');
+  $('pickA').innerHTML = names(); $('pickB').innerHTML = names();
+  $('pickA').value = a; $('pickB').value = b;
+  $('planH').textContent = free().length > 1 ? `Plan ${A} and ${B}` : free().length ? `Plan ${onName(free()[0])}` : 'Your final grade';
+}
+function genRules() {
+  const out = [['Weights:', C.cats.map(x => `${x.name} ${pct(x.weight)}${x.items.length > 1 ? ` (${x.items.length} scores)` : ''}`).join(', ') + '.']];
+  if (C.replace) out.push(['Replacement:', `if ${onName(C.replace.by)} beats your lowest score in ${C.cats.find(x => x.id === C.replace.cat).name}, it replaces that score and still counts on its own.`]);
+  const dr = C.cats.filter(x => x.drop);
+  if (dr.length) out.push(['Dropped:', dr.map(x => `lowest ${x.drop} of ${x.name}`).join(', ') + '. Its weight is shared among the scores that remain.']);
+  if (C.bestOf) out.push(['Better of:', `each score in ${C.cats.find(x => x.id === C.bestOf.cat).name} keeps the better of itself and its match in ${C.cats.find(x => x.id === C.bestOf.by).name}.`]);
+  for (const x of C.cats) if (x.items.some(i => (i.w || 1) !== 1)) out.push([`${x.name}:`, `scores are weighted ${x.items.map(i => i.w || 1).join(', ')}.`]);
+  for (const p of C.pens) out.push([`${p.name}:`, p.steps ? p.steps.map(r => `${r[0]} or more: ${r[1] === 'F' ? 'fail the course' : `${r[1]} points off`}`).join(', ') + '.' : `${p.per} points off each one past ${p.free}.`]);
+  if (C.penCap != null) out.push(['Deduction limit:', `deductions stop at ${C.penCap} points when the switch is on.`]);
+  if (C.slides) out.push(['Sliding cutoffs:', 'the slider shows what lower cutoffs would do.']);
+  const cur = C.cats.filter(x => x.curved);
+  if (C.curve && cur.length) out.push(['Scale-up:', `${cur.map(x => x.name).join(' and ')} ${C.curve.mult != null ? `× ${C.curve.mult}` : ''}${C.curve.mult != null && C.curve.plus != null ? ' or ' : ''}${C.curve.plus != null ? `+ ${C.curve.plus}` : ''}, capped at ${C.curve.cap}. Enter your raw percent before the scale-up.`]);
+  const wsum = C.cats.reduce((a, x) => a + x.weight, 0);
+  if (Math.abs(wsum - 100) > .01) out.push(['Weights add to:', `${pct(wsum)}, so each is rescaled to make 100%.`]);
+  out.push(['Cutoffs:', C.scale.slice(0, -1).map(r => `${r[0]} ${r[1]}`).join(', ') + (C.round ? `, rounded to the nearest ${C.round === 1 ? 'whole number' : 'half point'}.` : ', with no rounding.')]);
+  for (const n of C.notes || []) out.push([n[0].replace(/:?$/, ':'), n[1]]);
+  out.push(['Check with your instructor', 'for anything that affects a real decision. This is an unofficial calculator.']);
+  return out;
+}
+
+function touch() { st.touched = true; save(); schedule(); }
+/* Scores are stored as percents. Point-scored items convert only at the input. */
+const toUnit = (k, p) => OUT[k] ? Math.round(p * OUT[k]) / 100 : p;
+const fromUnit = (k, v) => OUT[k] ? v / OUT[k] * 100 : v;
+const secVal = k => clamp100(st.s[k] + secShift(C, st.s));
+const shown = k => SEC.has(k) ? secVal(k) : st.s[k];
+function paint(k, skipNumber) {
+  if (!$('n_' + k)) return;
+  if (!skipNumber) $('n_' + k).value = toUnit(k, shown(k));
+  $('r_' + k).value = toUnit(k, shown(k));
+}
+function setScore(k, v, fromNumber) {
+  if (SEC.has(k)) {
+    const L = C.link, d = secShift(C, st.s);
+    for (const i of L.items) st.s[i] = clamp100(st.s[i] + d);
+    st.s[k] = clamp100(v);
+    st.s[L.k] = L.items.reduce((a, i) => a + st.s[i], 0) / L.items.length;
+  } else st.s[k] = clamp100(v);
+  paint(k, fromNumber);
+  touch();
+}
+$('rows').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.cat) {
+    const cat = C.cats.find(x => x.id === t.dataset.cat);
+    cat.items.filter(i => !st.graded[i.k]).forEach(i => setScore(i.k, fromUnit(i.k, +t.value)));
+    return;
+  }
+  const k = t.dataset.k; if (!k) return;
+  if (t.type === 'range') setScore(k, fromUnit(k, +t.value));
+  else if (t.type === 'number') { const v = parseFloat(t.value); if (Number.isFinite(v)) setScore(k, fromUnit(k, v), true); }
+});
+$('rows').addEventListener('change', e => {
+  if (e.target.id === 'splitBox') {
+    st.split = e.target.checked;
+    if (!st.split) for (const i of C.link.items) st.s[i] = st.s[C.link.k];
+    touch(); return;
+  }
+  if (e.target.type === 'checkbox') { st.graded[e.target.dataset.k] = e.target.checked; touch(); }
+});
+$('rows').addEventListener('focusout', e => { if (e.target.type === 'number') e.target.value = toUnit(e.target.dataset.k, shown(e.target.dataset.k)); });
+$('pens').addEventListener('input', e => {
+  const k = e.target.dataset.p; if (!k) return;
+  const v = parseFloat(e.target.value); if (!Number.isFinite(v)) return;
+  st.s[k] = Math.max(0, v); touch();
+});
+$('pens').addEventListener('change', e => { if (e.target.id === 'penCapBox') { st.s.pen_cap = e.target.checked ? 1 : 0; touch(); } });
+$('slide').addEventListener('input', e => { st.slide = +e.target.value; touch(); });
+$('leftR').addEventListener('input', e => { leftAvg = +e.target.value; schedule(); });
+$('leftApply').addEventListener('click', () => { const v = +$('leftR').value; leftKeys().forEach(k => setScore(k, v)); });
+$('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const others = INPUTS.map(i => i.k).filter(k => st.graded[k] && !SEC.has(k));
+  const avg = others.length ? others.reduce((a, k) => a + st.s[k], 0) / others.length : 85;
+  const v = b.dataset.v === 'avg' ? Math.round(avg * 2) / 2 : +b.dataset.v;
+  scopeKeys().forEach(k => setScore(k, v));
+});
+$('scopeBtns').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.scope = b.dataset.s; save(); schedule(); });
+function pickPair(which, k) {
+  const other = st.pair[which ? 0 : 1], p = which ? [k === other ? st.pair[1] : other, k] : [k, k === other ? st.pair[0] : other];
+  st.pick = p; st.pair = p; C.focus = p.slice(); if (!p.includes(st.solveFor)) st.solveFor = p[1];
+  buildFocus(); payKey = p[1]; save(); schedule();
+}
+$('pickA').addEventListener('change', e => pickPair(0, e.target.value));
+$('pickB').addEventListener('change', e => pickPair(1, e.target.value));
+$('modes').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.mode = b.dataset.mode; touch(); });
+document.querySelectorAll('.zoomset').forEach(z => z.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; zoom = +b.dataset.z; schedule(); }));
+$('goals').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.target = +b.dataset.i; save(); schedule(); });
+$('solveFor').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; st.solveFor = b.dataset.k; save(); schedule(); });
+$('planR').addEventListener('input', e => setScore(planOther(), +e.target.value));
+$('planN').addEventListener('input', e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setScore(planOther(), v); });
+$('planN').addEventListener('blur', () => { $('planN').value = st.s[planOther()]; });
+$('planApply').addEventListener('click', () => { const v = +$('planApply').dataset.v; if (Number.isFinite(v)) setScore(st.solveFor, v); });
+$('gridBody').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const [a, f] = C.focus;
+  st.target = +b.dataset.g;
+  if (!st.graded[a]) setScore(a, +b.dataset.t);
+  if (!st.graded[f]) setScore(f, +b.dataset.f);
+  save(); schedule();
+});
+$('zRows').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || b.disabled) return; setScore(C.focus[1], +b.dataset.f); });
+$('need').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const v = +b.dataset.v; scopeKeys().forEach(k => setScore(k, v));
+});
+$('payoffKeys').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; payKey = b.dataset.k; schedule(); });
+$('sigma').addEventListener('input', schedule);
+let resetArmed = false;
+$('reset').addEventListener('click', () => {
+  if (!resetArmed) { resetArmed = true; $('reset').textContent = 'Click again to clear'; setTimeout(() => { resetArmed = false; $('reset').textContent = 'Clear my scores'; }, 3000); return; }
+  resetArmed = false; $('reset').textContent = 'Clear my scores';
+  st = defaultSt(C); store.scores[C.id] = st; save();
+  syncInputs(); schedule();
+});
+function syncInputs() {
+  for (const it of INPUTS) {
+    const k = it.k;
+    $('r_' + k).value = toUnit(k, shown(k));
+    if (document.activeElement !== $('n_' + k)) $('n_' + k).value = toUnit(k, shown(k));
+    if (!SEC.has(k)) { $('g_' + k).checked = !!st.graded[k]; $('r_' + k).disabled = !!st.graded[k]; }
+    else $('r_' + k).disabled = !!st.graded[C.link.k];
+    if (SEC.has(k)) $('row_' + k).hidden = !st.split;
+  }
+  if ($('splitBox')) $('splitBox').checked = !!st.split;
+  for (const p of C.pens) { $('r_' + p.k).value = st.s[p.k] || 0; if (document.activeElement !== $('n_' + p.k)) $('n_' + p.k).value = st.s[p.k] || 0; }
+  if ($('penCapBox')) $('penCapBox').checked = !!st.s.pen_cap;
+  if (C.slides) { $('slide').value = st.slide || 0; $('slideV').textContent = st.slide ? `−${st.slide}` : 'none'; }
+  for (const cat of C.cats) {
+    const av = $('avg_' + cat.id); if (!av) continue;
+    const u = cat.outOf || 100, m = cat.items.reduce((a, i) => a + st.s[i.k], 0) / cat.items.length;
+    av.textContent = `avg ${fmt(m * u / 100)}`;
+  }
+}
+const leftKeys = () => pool();
+
+let queued = false;
+function schedule() { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; render(); }); }
+
+function renderPlan(r, li) {
+  const s = st.s, mode = st.mode, [fa, fb] = C.focus, bothDone = st.graded[fa] && st.graded[fb], two = free().length === 2;
+  $('goalsBox').hidden = bothDone; $('planCtlRow').hidden = bothDone; $('planApply').parentElement.hidden = bothDone;
+  $('pickRow').hidden = pool().length < 3; $('solveFor').hidden = !two; $('planIf').hidden = !two;
+  $('planBox').hidden = !two; $('planZoomRow').hidden = !two;
+  if (st.graded[fb] && !st.graded[fa]) st.solveFor = fa;
+  if (st.graded[fa] && !st.graded[fb]) st.solveFor = fb;
+  const goal = Math.min(st.target ?? Math.max(0, li - 1), CUTS.length - 2), cut = CUTS[goal][1], g = CUTS[goal][0];
+  const sv = st.solveFor, ov = planOther(), solveName = NAME[sv], otherName = NAME[ov];
+  document.querySelectorAll('#goals .goal').forEach(b => b.setAttribute('aria-pressed', +b.dataset.i === goal));
+  $('solveB').setAttribute('aria-pressed', sv === fb); $('solveA').setAttribute('aria-pressed', sv === fa);
+  $('solveB').disabled = !!st.graded[fb]; $('solveA').disabled = !!st.graded[fa];
+  $('planL').textContent = `If I get on ${otherName}${OUT[ov] ? ' (%)' : ''}`;
+  const others = pool().length - free().length;
+  $('planHeld').hidden = bothDone || others < 1;
+  $('planHeld').textContent = `Your ${others} other ungraded ${others === 1 ? 'score stays' : 'scores stay'} where the sliders are.`;
+  $('planR').value = s[ov]; $('planR').disabled = !!st.graded[ov];
+  if (document.activeElement !== $('planN')) $('planN').value = s[ov];
+  const need = solve(C, s, [sv], cut, mode), apply = $('planApply'), stats = [];
+  const withOther = v => solve(C, { ...s, [ov]: v }, [sv], cut, mode);
+  const say = v => v === null ? 'out of reach' : v === 0 ? 'any score' : v.toFixed(1);
+  if (bothDone) {
+    $('planBig').textContent = `Everything is graded: ${floor2(r.total)}, ${article(CUTS[li][0])}.`;
+    $('planSub').textContent = 'Uncheck Graded on any score to explore it again.';
+  } else if (need === null) {
+    const best = course(C, { ...s, [sv]: 100 }, mode).total;
+    $('planBig').textContent = `${g} is out of reach with ${fmt(s[ov])} on ${otherName}.`;
+    $('planSub').textContent = `Even a 100 on ${onName(sv)} gets you to ${floor2(best)}, and ${g} starts at ${cut}.`;
+  } else if (need === 0) {
+    $('planBig').textContent = `You get ${article(g)} with any ${solveName} score.`;
+    $('planSub').textContent = `With ${fmt(s[ov])} on ${otherName}, even a 0 on ${onName(sv)} reaches ${cut}.`;
+  } else {
+    const gap = s[sv] - need;
+    $('planBig').textContent = `For ${article(g)}, you need ${need.toFixed(1)}${OUT[sv] ? `% (${fmt(need * OUT[sv] / 100)} of ${OUT[sv]})` : ''} on ${onName(sv)}.`;
+    $('planSub').textContent = `Your ${solveName} slider is at ${fmt(s[sv])}, ${fmt(Math.abs(gap))} ${gap >= 0 ? 'above' : 'below'} that.`;
+  }
+  if (two) {
+    stats.push(`<span><b>${say(withOther(100))}</b>needed with 100 on ${esc(otherName)}</span>`);
+    stats.push(`<span><b>${say(withOther(0))}</b>needed with 0 on ${esc(otherName)}</span>`);
+    if (sv === fb && need) {
+      const base = solveExact(C, s, [fb], cut, mode); let a = s[fa], b = s[fa];
+      const same = t => { const v = solveExact(C, { ...s, [fa]: t }, [fb], cut, mode); return v !== null && Math.abs(v - base) < .01; };
+      while (a - .5 >= 0 && same(a - .5)) a -= .5;
+      while (b + .5 <= 100 && same(b + .5)) b += .5;
+      stats.push(b - a >= 1 ? `<span><b>${fmt(a)} to ${fmt(b)}</b>${esc(NAME[fa])} range that gives this same answer</span>` : `<span><b>Every point</b>of ${esc(NAME[fa])} changes this answer</span>`);
+    }
+  }
+  $('planStats').innerHTML = stats.join('');
+  const canApply = !bothDone && need && !st.graded[sv] && Math.abs(need - s[sv]) > 1e-6;
+  apply.hidden = !canApply;
+  if (canApply) { apply.dataset.v = need; apply.textContent = `Set ${solveName} to ${need.toFixed(1)}`; }
+  if (two) drawPlan(cut, g, goal);
+  $('gridWrap').hidden = !two;
+  if (!$('gridWrap').hidden) {
+    const cols = [60, 70, 75, 80, 85, 90, 95, 100], sh = INPUTS.find(i => i.k === fa).sh;
+    $('gridHead').innerHTML = `<tr><th scope="col">Grade</th>${cols.map(c => `<th scope="col">${esc(sh)} ${c}</th>`).join('')}</tr>`;
+    $('gridBody').innerHTML = CUTS.slice(0, Math.min(9, CUTS.length - 1)).map((c, i) => {
+      let prev;
+      const cells = cols.map((t, j) => {
+        const v = solve(C, { ...s, [fa]: t }, [fb], c[1], mode), sameLeft = j > 0 && v === prev && v !== null; prev = v;
+        const txt = v === null ? '–' : v === 0 ? 'Any' : v.toFixed(1);
+        return `<td><button class="gc ${sameLeft ? 'same' : ''}" id="gc${i}_${j}" type="button" data-g="${i}" data-t="${t}" data-f="${v ?? ''}" ${v === null ? 'disabled' : ''} aria-label="${esc(c[0])} with ${t} on ${esc(NAME[fa])}: ${txt}">${txt}</button></td>`;
+      }).join('');
+      return `<tr class="${i === goal ? 'goalrow' : ''}"><td class="g"><span class="pill" style="background:${bandVar(i)}">${esc(c[0])}</span></td>${cells}</tr>`;
+    }).join('');
+  }
+}
+
+function drawPlan(cut, g, goal) {
+  const svg = $('plan'), s = st.s, mode = st.mode, [fa, fb] = C.focus, W = $('planBox').clientWidth || 640, H = Math.round(Math.max(290, Math.min(400, W * .56)));
+  const P = { l: 46, r: 18, t: 14, b: 42 }, lo = zoom;
+  const X = v => P.l + (v - lo) / (100 - lo) * (W - P.l - P.r), Y = v => H - P.b - (Math.max(v, lo) - lo) / (100 - lo) * (H - P.t - P.b);
+  const pts = [];
+  for (let t = lo; t <= 100; t += .5) { const v = solveExact(C, { ...s, [fa]: t }, [fb], cut, mode); if (v !== null) pts.push([t, v]); }
+  let h = '';
+  const step = lo ? 10 : 20;
+  for (let v = lo; v <= 100; v += step) {
+    h += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    h += `<text x="${X(v)}" y="${H - P.b + 17}" text-anchor="middle" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${v}</text>`;
+    h += `<text x="${P.l - 7}" y="${Y(v) + 4}" text-anchor="end" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${v}</text>`;
+  }
+  h += `<text x="${(P.l + W - P.r) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg2)">${esc(NAME[fa])} score</text>`;
+  h += `<text transform="translate(12 ${(P.t + H - P.b) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg2)">${esc(NAME[fb])} score</text>`;
+  if (pts.length > 1) {
+    const line = pts.map(p => `${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('L');
+    h += `<path d="M${X(pts[0][0]).toFixed(1)} ${Y(100)}L${line}L${X(100)} ${Y(100)}Z" fill="var(--${CUTS[goal][2]})" opacity=".5"/>`;
+    h += `<path d="M${line}" fill="none" stroke="var(--fg)" stroke-width="2" stroke-linejoin="round"/>`;
+    let a = 0;
+    for (let i = 1; i <= pts.length; i++) {
+      if (i === pts.length || Math.abs(pts[i][1] - pts[i - 1][1]) > .005) {
+        if (i - 1 - a >= 4 && pts[a][1] > lo) {
+          const x1 = X(pts[a][0]), x2 = X(pts[i - 1][0]), y = Y(pts[a][1]);
+          h += `<line x1="${x1}" x2="${x2}" y1="${y}" y2="${y}" stroke="var(--accent)" stroke-width="5" stroke-linecap="round"/>`;
+          if (x2 - x1 > 165) h += `<text x="${x1 + 4}" y="${y + 17}" font-size="12.5" font-weight="600" fill="var(--fg)">${esc(NAME[fa])} doesn't matter here</text>`;
+        }
+        a = i;
+      }
+    }
+    h += `<text x="${W - P.r - 6}" y="${P.t + 16}" text-anchor="end" font-size="12.5" font-weight="600" fill="var(--on-band)">${esc(g)} or better</text>`;
+  } else {
+    h += `<text x="${(P.l + W - P.r) / 2}" y="${H / 2}" text-anchor="middle" font-size="14" font-weight="600" fill="var(--fg2)">${esc(g)} is out of reach, even with 100 on both</text>`;
+  }
+  if (s[fa] >= lo && s[fb] >= lo) h += `<circle cx="${X(s[fa])}" cy="${Y(s[fb])}" r="8" fill="var(--mark-ring)"/><circle cx="${X(s[fa])}" cy="${Y(s[fb])}" r="5.5" fill="var(--mark)"/>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H);
+  svg.innerHTML = h;
+  svg._geo = { P, W, H, lo, cut, g };
+}
+function planPoint(ev) {
+  const g = $('plan')._geo, b = $('planBox').getBoundingClientRect(), mx = ev.clientX - b.left, my = ev.clientY - b.top;
+  const t = g.lo + (mx - g.P.l) / (g.W - g.P.l - g.P.r) * (100 - g.lo), f = g.lo + (g.H - g.P.b - my) / (g.H - g.P.t - g.P.b) * (100 - g.lo);
+  const snap = v => Math.max(g.lo, Math.min(100, Math.round(v * 2) / 2));
+  return { g, x: snap(t), y: snap(f), mx, my, inside: t >= g.lo - 2 && t <= 102 && f >= g.lo - 2 && f <= 102 };
+}
+function pairSet(p) { const [a, b] = C.focus; if (!st.graded[a]) setScore(a, p.x); if (!st.graded[b]) setScore(b, p.y); }
+let planDrag = false;
+const planEl = $('planBox');
+planEl.addEventListener('pointerdown', e => { const p = planPoint(e); if (!p.inside) return; planDrag = true; planEl.setPointerCapture(e.pointerId); pairSet(p); });
+planEl.addEventListener('pointerup', () => { planDrag = false; });
+planEl.addEventListener('pointercancel', () => { planDrag = false; });
+planEl.addEventListener('pointerleave', () => { $('planTip').hidden = true; });
+planEl.addEventListener('pointermove', e => {
+  const p = planPoint(e), tip = $('planTip'), [a, b] = C.focus;
+  if (planDrag) pairSet(p);
+  if (!p.inside) { tip.hidden = true; return; }
+  const v = solve(C, { ...st.s, [a]: p.x }, [b], p.g.cut, st.mode);
+  tip.textContent = `${NAME[a]} ${p.x} → ${p.g.g}: ${v === null ? 'out of reach' : v === 0 ? 'any ' + NAME[b] : NAME[b] + ' ' + v.toFixed(1)}`;
+  tip.hidden = false;
+  tip.style.left = Math.max(0, Math.min(p.g.W - tip.offsetWidth, p.mx - tip.offsetWidth / 2)) + 'px';
+  tip.style.top = Math.max(0, p.my - 34) + 'px';
+});
+
+function renderMatter() {
+  const s = st.s, mode = st.mode, [a, b] = C.focus, A = NAME[a], B = NAME[b], done = !!st.graded[a];
+  const z = flatTop(C, s, a, mode), zMax = flatTop(C, { ...s, [b]: 100 }, a, mode), per = (WT[a] / 100).toFixed(2);
+  const aCat = catOf(C, a), viaRep = C.replace && aCat && aCat.id === C.replace.cat && C.replace.by === b, viaBest = C.bestOf && aCat && aCat.id === C.bestOf.cat && C.link.k === b, replaces = viaRep || viaBest;
+  const hint = $('hint_' + a), hasFlat = zMax > 0 || z > 0;
+  $('mSection').hidden = done || !hasFlat;
+  document.querySelectorAll('.hint').forEach(h => { h.hidden = true; });
+  if (hint) { hint.hidden = done || !hasFlat; hint.textContent = `No effect up to ${fmt(z)}. Counts above that.`; }
+  $('mZones').hidden = done || !hasFlat; $('mKey').hidden = done || !hasFlat; $('mNote').hidden = done || !hasFlat || !!st.graded[b];
+  $('mWhy').hidden = true;
+  if (done || !hasFlat) return;
+  const always = zMax >= 100 ? '' : `Above ${fmt(zMax)} it always counts, whatever you get on ${onName(b)}.`;
+  if (!hasFlat) {
+    const capped = nextPoint(C, s, a, mode) < 1e-9 && s[a] < 100;
+    $('mBig').textContent = capped ? `Not at ${fmt(s[a])}. It is already at the cap.` : `Yes. Each ${A} point adds ${per} to your course grade.`;
+    $('mSub').textContent = capped ? 'Extra points here are cut off by the scale-up cap.' : `Every point counts, whatever you get on ${onName(b)}.`;
+    return;
+  }
+  const how = replaces ? `${onName(b).replace(/^t/, 'T')} of ${fmt(s[b])} would replace ${A} anywhere in that range` : `${A} would be dropped anywhere in that range`;
+  const yours = replaces ? `Your ${B} of ${fmt(s[b])} would replace ${A} anywhere in that range` : how;
+  if (s[a] <= z) {
+    $('mBig').textContent = `Not at ${fmt(s[a])}. Any ${A} up to ${fmt(z)} gives the same grade.`;
+    $('mSub').textContent = replaces && s[b] <= zMax
+      ? `${yours}. A lower ${B} shrinks the range, so a solid ${A} protects you if ${onName(b)} goes badly. ${always}`
+      : `${yours}, so only points above ${fmt(z)} add anything. ${always}`;
+  } else {
+    $('mBig').textContent = `Yes. At ${fmt(s[a])}, each ${A} point adds ${per} to your course grade.`;
+    $('mSub').textContent = `Dropping to ${fmt(z)} would cost ${((s[a] - z) * WT[a] / 100).toFixed(2)} course points. Below ${fmt(z)} it stops mattering${replaces ? `, because ${onName(b)} takes over` : ''}. ${always}`;
+  }
+  if (viaRep) {
+    $('mWhy').hidden = false;
+    $('mWhy').textContent = `Scoring below ${fmt(zMax)} isn't automatically free. ${onName(b).replace(/^t/, 'T')} has to beat ${A} to replace it, so a ${A} above your ${B} still counts.`;
+  } else if (viaBest) {
+    $('mWhy').hidden = false;
+    $('mWhy').textContent = `You keep the better of ${A} and its ${singular(B)} section, so ${A} only adds points where it beats that section.`;
+  }
+  const rows = st.graded[b] ? [s[b]] : [...new Set([60, 70, 80, 90, 100, s[b]])].sort((x, y) => x - y);
+  $('zRows').innerHTML = rows.map(f => {
+    const zz = flatTop(C, { ...s, [b]: f }, a, mode), mine = f === s[b];
+    return `<div class="zrow ${mine ? 'mine' : ''}"><button class="btn small" id="zf${String(f).replace('.', '_')}" data-f="${f}" type="button" ${st.graded[b] ? 'disabled' : ''} aria-pressed="${mine}">${esc(B)} ${fmt(f)}</button>
+      <div class="ztrack" aria-hidden="true"><i class="off" style="flex:${Math.max(zz, .01)} 1 0"></i><i class="on" style="flex:${Math.max(100 - zz, .01)} 1 0"></i></div>
+      <span class="zt">above ${fmt(zz)}</span></div>`;
+  }).join('');
+  $('zLine').style.left = `calc(${s[a]}% - 1px)`;
+}
+
+function render() {
+  const focusId = document.activeElement && document.activeElement.id;
+  syncPair();
+  if (C.slides) { const sl = st.slide || 0; C.scale = BASE.scale.map(r => [r[0], r[1] ? r[1] - sl : 0]); CUTS = CUTS.map((c, i) => [c[0], C.scale[i][1], c[2]]); }
+  syncInputs();
+  const s = st.s, mode = st.mode, r = course(C, s, mode), li = letterIdx(C, r.total);
+  const band = bandVar(li);
+  $('tile').style.background = band; $('miniBar').style.background = band;
+  $('tileN').textContent = floor2(r.total); $('tileL').textContent = CUTS[li][0];
+  $('miniN').textContent = floor2(r.total); $('miniL').textContent = CUTS[li][0];
+  const unit = (C.round || 0) / 2;
+  $('sayMain').textContent = li > 0
+    ? `${floor2(CUTS[li - 1][1] - unit - r.total)} points short of ${CUTS[li - 1][0]}`
+    : 'Top of the scale';
+  if (C.replace) {
+    const cat = C.cats.find(x => x.id === C.replace.cat), tn = cat.items.find(i => i.k === r.lo).n, by = NAME[C.replace.by];
+    const gain = (cat.weight / cat.items.length / 100) * (s[C.replace.by] - r.orig);
+    $('saySub').textContent = r.replaced
+      ? `${by} replaces ${tn} (${fmt(r.orig)} → ${fmt(s[C.replace.by])}), adding ${gain.toFixed(2)} points.`
+      : `${by} is not above your lowest ${singular(cat.name)} (${tn}, ${fmt(r.orig)}), so nothing is replaced.`;
+  } else if (C.bestOf) {
+    const n = r.swaps.map(k => NAME[k]);
+    $('saySub').textContent = n.length ? `${C.link.n} sections beat ${n.join(', ')}.` : `No ${singular(C.link.n)} section beats its midterm right now.`;
+  } else if (r.failed) $('saySub').textContent = 'Deductions fail the course at this level.';
+  else if (r.ded) $('saySub').textContent = `Base grade ${floor2(r.base)}, minus ${fmt(r.ded)} in deductions.`;
+  else $('saySub').textContent = r.dropped.length ? `Dropped right now: ${r.dropped.map(k => NAME[k]).join(', ')}.` : 'Every score counts at its full weight.';
+  CUTS.forEach((c, i) => $('st' + i).classList.toggle('on', i === li));
+  const where = remote ? 'to your account, visible only to you' : 'in this browser only';
+  $('status').textContent = st.touched ? `Your scores are saved ${where}.` : `These are example numbers. Type yours over them. ${remote ? 'They stay private to you.' : 'They stay in this browser.'}`;
+  document.querySelectorAll('#modes .btn').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === reading(C, mode)));
+  document.querySelectorAll('.zoomset .btn').forEach(b => b.setAttribute('aria-pressed', +b.dataset.z === zoom));
+  const P = pool(), big = k => (catOf(C, k) || { items: [] }).items.length >= 4;
+  const payList = [C.focus[1], C.focus[0], ...P.filter(k => !C.focus.includes(k) && !big(k))].filter(k => !st.graded[k]);
+  if (!payList.includes(payKey)) payKey = payList[0];
+  $('payoffKeys').innerHTML = payList.map(k => `<button class="btn" id="pay_${esc(k)}" data-k="${esc(k)}" type="button" aria-pressed="${k === payKey}">${esc(NAME[k])}</button>`).join('');
+  const none = !P.length, two = free().length === 2;
+  $('tileName').textContent = none ? 'final grade' : 'projected grade';
+  $('presetBox').hidden = none;
+  $('presetL').textContent = st.scope === 'pair' && two ? `Try a ${NAME[C.focus[0]]} and ${NAME[C.focus[1]]} outcome` : `Try an outcome on ${P.length === 1 ? NAME[P[0]] : `all ${P.length} ungraded scores`}`;
+  $('scopeBox').hidden = P.length < 3;
+  document.querySelectorAll('#scopeBtns .btn').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === st.scope));
+  $('scopeAll').textContent = `Everything ungraded (${P.length})`;
+  $('needSec').hidden = $('paySec').hidden = $('leverSec').hidden = $('luckSec').hidden = none;
+  $('mapSec').hidden = !two;
+  renderPlan(r, li); renderLeft(r, li); renderPens(r, li); renderMatter(); renderMekko(r);
+  $('allSec').hidden = none;
+  if (!none) { renderAll(r, li); renderNeed(r, li); renderPayoff(r); renderLever(r); renderLuck(li); }
+  if (two) renderMap(r);
+  if (focusId && document.activeElement === document.body && $(focusId)) $(focusId).focus();
+}
+
+function renderNeed(r, li) {
+  const s = st.s, mode = st.mode, keys = scopeKeys(), [a, b] = C.focus;
+  const exam = k => INPUTS.find(i => i.k === k).exam ? 0 : 1, singles = C.focus.slice().reverse().filter(k => !st.graded[k]).sort((x, y) => exam(x) - exam(y)), showBoth = keys.length > 1;
+  const cell = v => v === null ? `<td class="no">&gt;100</td>` : v === 0 ? `<td class="any">Any</td>` : `<td>${v.toFixed(1)}</td>`;
+  $('needHead').innerHTML = `<tr><th scope="col">Grade</th>${singles.map(k => `<th scope="col">${esc(NAME[k])}<br>needed</th>`).join('')}${showBoth ? `<th scope="col">Same score<br>on ${keys.length === 2 ? 'both' : `all ${keys.length}`}</th>` : ''}<th scope="col"><span class="visually">Try</span></th></tr>`;
+  $('need').innerHTML = CUTS.slice(0, -1).map((c, i) => {
+    const both = solve(C, s, keys, c[1], mode), can = keys.length && both !== null;
+    return `<tr class="${i === li ? 'here' : ''}"><td class="g"><span class="pill" style="background:${bandVar(i)}">${esc(c[0])}</span><span class="cut">${c[1]}+</span></td>
+      ${singles.map(k => cell(solve(C, s, [k], c[1], mode))).join('')}${showBoth ? cell(both) : ''}
+      <td><button class="btn small" id="try${i}" data-v="${can ? both : ''}" type="button" ${can ? '' : 'disabled'} aria-label="Set ungraded scores for ${esc(c[0])}">Try</button></td></tr>`;
+  }).join('');
+  $('needLede').textContent = singles.length === 2
+    ? `${NAME[b]} needed assumes ${NAME[a]} stays where your slider is, and ${NAME[a]} needed assumes the same for ${onName(b)}. Try sets ${keys.length === 2 ? 'both' : `all ${keys.length} ungraded scores`} to that grade.`
+    : `Everything else stays where your sliders are. Try sets ${keys.length > 1 ? `all ${keys.length} ungraded scores` : onName(singles[0])} to that grade.`;
+}
+
+function renderMekko(r) {
+  const by = C.replace ? C.replace.by : C.link ? C.link.k : null, counted = ITEMS.filter(i => r.w[i.k] > 0);
+  let cols;
+  if (counted.length > 10) {
+    cols = C.cats.map(cat => {
+      const its = cat.items.filter(i => r.w[i.k] > 0), w = its.reduce((a, i) => a + r.w[i.k], 0);
+      const v = its.reduce((a, i) => a + r.w[i.k] * r.e[i.k], 0) / (w || 1);
+      return { n: cat.name.slice(0, 5), full: cat.name, w, v, sw: false, fin: C.bestOf ? cat.id === C.bestOf.by : false, proj: its.some(i => !st.graded[SEC.has(i.k) ? C.link.k : i.k]) };
+    }).filter(o => o.w > 0);
+  } else cols = counted.map(i => ({ n: i.sh, full: i.n, w: r.w[i.k], v: r.e[i.k], sw: r.swaps.includes(i.k), fin: i.k === by || SEC.has(i.k), proj: !st.graded[SEC.has(i.k) ? C.link.k : i.k] }));
+  const byShort = by ? (NAME[by] || 'F')[0] : '';
+  const flex = w => `flex:${w} 1 0`;
+  $('mekko').innerHTML = cols.map(o => `<div class="mcol ${o.sw ? 'swapped' : ''} ${o.fin ? 'final' : ''} ${o.proj ? 'proj' : ''}" style="${flex(o.w)}" title="${esc(o.full)}: ${fmt(o.v)}"><i style="height:${Math.min(100, o.v)}%"></i></div>`).join('');
+  $('mlabels').innerHTML = cols.map(o => `<div style="${flex(o.w)}"><b>${esc(o.n)}${o.sw ? '→' + esc(byShort) : ''}</b>${fmt(o.v)}<br><span class="lost">−${(o.w * (100 - o.v) / 100).toFixed(1)}</span></div>`).join('');
+  const parts = ['<span style="--swatch: var(--accent)">Your own score</span>'];
+  if (cols.some(o => o.proj)) parts.push('<span class="pjk" style="--swatch: var(--accent)">Faded: not graded yet</span>');
+  if (C.replace) parts.push(`<span style="--swatch: var(--gAp)">${esc(NAME[by])} score, including any ${esc(singular(C.cats.find(x => x.id === C.replace.cat).name))} it replaced</span>`);
+  else if (C.bestOf) parts.push(`<span style="--swatch: var(--gAp)">${esc(C.link.n)} sections, including any midterm they beat</span>`);
+  if (r.dropped.length) parts.push(`<span style="--swatch: var(--sunk)">Dropped: ${esc(r.dropped.map(k => NAME[k]).join(', '))}</span>`);
+  if (r.ded) parts.push(`<span style="--swatch: var(--gF)">Deductions: −${fmt(r.ded)}</span>`);
+  $('mekKey').innerHTML = parts.join('');
+}
+
+function renderLeft(r, li) {
+  const keys = leftKeys(), s = st.s, mode = st.mode, on = keys.length > 1;
+  $('leftSec').hidden = !on; if (!on) return;
+  const atAll = v => { const z = { ...s }; keys.forEach(k => { z[k] = v; }); return course(C, z, mode).total; };
+  const lo = atAll(0), hi = atAll(100);
+  const mean = keys.reduce((a, k) => a + s[k], 0) / keys.length, av = leftAvg ?? Math.round(mean * 2) / 2;
+  $('leftR').value = av; $('leftV').textContent = fmt(av);
+  const proj = atAll(av), pl = letterIdx(C, proj);
+  $('leftBig').textContent = `Averaging ${fmt(av)} on the ${keys.length} scores left gets you ${floor2(proj)}, ${article(CUTS[pl][0])}.`;
+  $('leftSub').textContent = `You can't finish below ${floor2(lo)}, and the most you can reach is ${floor2(hi)}.`;
+  const a = Math.max(0, Math.floor(lo)), b = Math.min(100, Math.ceil(hi)), span = Math.max(1, b - a), seg = [];
+  CUTS.forEach((c, i) => {
+    const top = i ? CUTS[i - 1][1] : 100, x = Math.max(c[1], a), y = Math.min(top, b);
+    if (y > x) seg.push(`<span style="flex:${y - x} 1 0;background:${bandVar(i)}">${(y - x) / span > .045 ? esc(c[0]) : ''}</span>`);
+  });
+  $('rangeBar').innerHTML = seg.reverse().join('') + `<i style="left:${(proj - a) / span * 100}%"></i>`;
+  $('rangeLo').textContent = a; $('rangeHi').textContent = b;
+  $('leftNeeds').innerHTML = CUTS.slice(0, -1).map((c, i) => {
+    const v = solve(C, s, keys, c[1], mode);
+    if (v === null) return '';
+    return `<span class="needchip"><span class="pill" style="background:${bandVar(i)}">${esc(c[0])}</span><b>${v === 0 ? 'Any' : v.toFixed(1)}</b></span>`;
+  }).join('');
+}
+
+/* All scores at once. Long categories move as one group so every class stays readable. */
+function units() {
+  const P = pool(), out = [], seen = {};
+  for (const it of INPUTS) {
+    if (!P.includes(it.k)) continue;
+    const cat = catOf(C, it.k);
+    if (cat && cat.items.length >= 5) {
+      if (seen[cat.id]) continue;
+      seen[cat.id] = 1;
+      out.push({ label: cat.name, sh: cat.name.slice(0, 4), keys: cat.items.map(i => i.k).filter(k => P.includes(k)) });
+    } else out.push({ label: it.n, sh: it.sh, keys: [it.k] });
+  }
+  return out;
+}
+function renderAll(r, li) {
+  const U = units(), view = st.allView === 'paths' ? 'paths' : 'swing';
+  $('allSec').hidden = U.length < 2; if (U.length < 2) return;
+  document.querySelectorAll('#allView .btn').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === view));
+  const dd = st.swing ?? 10;
+  document.querySelectorAll('#allSwing .btn').forEach(b => b.setAttribute('aria-pressed', +b.dataset.d === dd));
+  $('allSwing').hidden = view !== 'swing'; $('allKey').hidden = view !== 'paths';
+  $('allBox').classList.toggle('drag', view === 'paths');
+  if (view === 'swing') drawSwing(U, r, dd); else drawPaths(U, r, li);
+}
+function drawSwing(U, r, dd) {
+  const svg = $('allChart'), W = $('allBox').clientWidth || 640, L = W < 500 ? 88 : 136, cur = r.total;
+  const rows = U.map(u => { const [lo, hi] = swingRange(C, st.s, u.keys, dd, st.mode); return { ...u, lo, hi }; }).sort((x, y) => (y.hi - y.lo) - (x.hi - x.lo));
+  const top = 26, rh = 34, H = top + rows.length * rh + 28;
+  let a = Math.min(cur, ...rows.map(o => o.lo)), b = Math.max(cur, ...rows.map(o => o.hi));
+  if (b - a < 2) { a -= 1; b += 1; }
+  const x0 = L + 48, x1 = W - 76, X = v => x0 + (v - a) / (b - a) * (x1 - x0);
+  let h = '', lastX = -99;
+  CUTS.slice(0, -1).slice().reverse().forEach(c => {
+    if (c[1] <= a || c[1] >= b) return;
+    const x = X(c[1]);
+    h += `<line x1="${x}" x2="${x}" y1="${top - 4}" y2="${H - 26}" stroke="var(--fg3)" stroke-width="1" stroke-dasharray="3 3"/>`;
+    if (x - lastX >= 22) { h += `<text x="${x}" y="15" text-anchor="middle" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${esc(c[0])}</text>`; lastX = x; }
+  });
+  rows.forEach((o, i) => {
+    const y = top + i * rh, mid = y + rh / 2, flat = o.hi - o.lo < .005, nm = o.label.length > (W < 500 ? 11 : 18) ? o.label.slice(0, W < 500 ? 10 : 17) + '…' : o.label;
+    h += `<g><title>${esc(o.label)}: ${floor2(o.lo)} to ${floor2(o.hi)}</title>`;
+    h += `<text x="${L - 8}" y="${mid + 4}" text-anchor="end" font-size="13" font-weight="600" fill="var(--fg)">${esc(nm)}</text>`;
+    if (X(cur) - X(o.lo) > .5) h += `<rect x="${X(o.lo)}" y="${mid - 9}" width="${X(cur) - X(o.lo) - 1}" height="18" rx="2" fill="var(--gF)"/>`;
+    if (X(o.hi) - X(cur) > .5) h += `<rect x="${X(cur) + 1}" y="${mid - 9}" width="${X(o.hi) - X(cur) - 1}" height="18" rx="2" fill="var(--gBp)"/>`;
+    if (flat) h += `<text x="${X(cur) + 8}" y="${mid + 4}" font-size="12" fill="var(--fg2)">no change</text>`;
+    else {
+      const lt = CUTS[letterIdx(C, o.lo)][0], ht = CUTS[letterIdx(C, o.hi)][0];
+      if (cur - o.lo > .005) h += `<text x="${X(o.lo) - 5}" y="${mid + 4}" text-anchor="end" font-size="12" font-family="var(--mono)" fill="var(--fg2)" paint-order="stroke" stroke="var(--panel)" stroke-width="4">${floor2(o.lo)}</text>`;
+      if (o.hi - cur > .005) h += `<text x="${X(o.hi) + 5}" y="${mid + 4}" font-size="12" font-family="var(--mono)" fill="var(--fg2)" paint-order="stroke" stroke="var(--panel)" stroke-width="4">${floor2(o.hi)} ${esc(ht)}</text>`;
+    }
+    h += '</g>';
+  });
+  h += `<line x1="${X(cur)}" x2="${X(cur)}" y1="${top - 6}" y2="${H - 24}" stroke="var(--fg)" stroke-width="2"/>`;
+  h += `<text x="${X(cur)}" y="${H - 8}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg)">You: ${floor2(cur)}</text>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H); svg.innerHTML = h; svg._geo = null;
+  const best = rows[0], flats = rows.filter(o => o.hi - o.lo < .005).map(o => o.label);
+  const span = dd ? `Moving it ${dd} points either way` : 'Going from 0 to 100 on it';
+  $('allRead').textContent = `Biggest mover: ${best.label}. ${span} moves you from ${floor2(best.lo)} to ${floor2(best.hi)}.${flats.length ? ` Not moving your grade at this range: ${flats.join(', ')}.` : ''}`;
+  $('allNote').textContent = 'Each bar changes one score and leaves the rest where they are. Red is what you could lose, and green is what you could gain.';
+}
+function drawPaths(U, r, li) {
+  const svg = $('allChart'), s = st.s, W = $('allBox').clientWidth || 640, H = Math.round(Math.max(300, Math.min(420, W * .5))), lo = U.some(u => u.keys.some(k => s[k] < zoom)) ? 0 : zoom;
+  const n = U.length + 1, space = (W - 80) / (n - 1), stag = space < 46, P = { l: 36, r: 44, t: 14, b: stag ? 44 : 30 };
+  const X = i => P.l + i * (W - P.l - P.r) / (n - 1), Y = v => H - P.b - (Math.max(v, lo) - lo) / (100 - lo) * (H - P.t - P.b);
+  const goal = Math.min(st.target ?? Math.max(0, li - 1), CUTS.length - 2), g = CUTS[goal][0], sig = +$('sigma').value;
+  const mean = (z, u) => u.keys.reduce((a, k) => a + z[k], 0) / u.keys.length;
+  let h = '';
+  for (let v = lo; v <= 100; v += lo ? 10 : 20) {
+    h += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/>`;
+    h += `<text x="${P.l - 7}" y="${Y(v) + 4}" text-anchor="end" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${v}</text>`;
+  }
+  CUTS.forEach((c, i) => {
+    const top = i ? CUTS[i - 1][1] : 100, x = Math.max(c[1], lo), y = Math.min(top, 100); if (y <= x) return;
+    h += `<rect x="${X(n - 1) - 7}" y="${Y(y)}" width="14" height="${Y(x) - Y(y)}" fill="var(--${c[2]})"/>`;
+    if (Y(x) - Y(y) >= 13) h += `<text x="${X(n - 1) + 11}" y="${(Y(x) + Y(y)) / 2 + 4}" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${esc(c[0])}</text>`;
+  });
+  const rnd = mulberry(20261102), keys = U.flatMap(u => u.keys); let hit = '', miss = '', hits = 0;
+  const N = 160;
+  for (let i = 0; i < N; i++) {
+    const z = { ...s };
+    for (const k of keys) { const u = 1 - rnd(), v = rnd(); z[k] = clamp100(s[k] + sig * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)); }
+    const t = course(C, z, st.mode).total, ok = letterIdx(C, t) <= goal;
+    const path = 'M' + [...U.map((u, j) => `${X(j).toFixed(1)} ${Y(mean(z, u)).toFixed(1)}`), `${X(n - 1).toFixed(1)} ${Y(t).toFixed(1)}`].join('L');
+    if (ok) { hit += path; hits++; } else miss += path;
+  }
+  h += `<path d="${miss}" fill="none" stroke="var(--fg3)" stroke-width="1" opacity=".22"/><path d="${hit}" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".3"/>`;
+  U.forEach((u, i) => {
+    h += `<line x1="${X(i)}" x2="${X(i)}" y1="${P.t}" y2="${H - P.b}" stroke="var(--fg3)" stroke-width="1"/>`;
+    h += `<text x="${X(i)}" y="${H - P.b + 16 + (stag && i % 2 ? 15 : 0)}" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--fg2)">${esc(u.sh)}</text>`;
+  });
+  h += `<text x="${X(n - 1)}" y="${H - P.b + 16 + (stag && (n - 1) % 2 ? 15 : 0)}" text-anchor="middle" font-size="11.5" font-weight="600" fill="var(--fg)">Grade</text>`;
+  const pts = [...U.map((u, j) => [X(j), Y(mean(s, u))]), [X(n - 1), Y(r.total)]];
+  h += `<path d="M${pts.map(p => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('L')}" fill="none" stroke="var(--fg)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  pts.forEach((p, i) => { const last = i === n - 1; h += `<circle cx="${p[0]}" cy="${p[1]}" r="${last ? 6 : 8}" fill="var(--mark-ring)"/><circle cx="${p[0]}" cy="${p[1]}" r="${last ? 4 : 5.5}" fill="var(--mark)"/>`; });
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H); svg.innerHTML = h;
+  svg._geo = { U, X, P, H, W, lo, n };
+  $('allGoal').textContent = `Reaches ${g} or better`;
+  $('allRead').textContent = `${Math.round(hits / N * 100)}% of these ${N} possible semesters reach ${g} or better.`;
+  $('allNote').textContent = `Each axis is a score, and each faint line is one possible semester running through all of them to a course grade. Drag a dot to change that score. The spread comes from Exam swing in the Luck simulator, and the goal comes from Grade I want.`;
+}
+function allPoint(ev) {
+  const g = $('allChart')._geo; if (!g) return null;
+  const b = $('allBox').getBoundingClientRect(), mx = ev.clientX - b.left, my = ev.clientY - b.top;
+  let i = Math.round((mx - g.P.l) / ((g.W - g.P.l - g.P.r) / (g.n - 1)));
+  const v = g.lo + (g.H - g.P.b - my) / (g.H - g.P.t - g.P.b) * (100 - g.lo);
+  return { g, i, mx, my, v: Math.max(g.lo, Math.min(100, Math.round(v * 2) / 2)) };
+}
+let allDrag = null;
+const allEl = $('allBox');
+function allSet(i, v) { const u = $('allChart')._geo.U[i]; u.keys.forEach(k => setScore(k, v)); }
+allEl.addEventListener('pointerdown', e => {
+  const p = allPoint(e); if (!p || p.i < 0 || p.i >= p.g.U.length) return;
+  allDrag = p.i; allEl.setPointerCapture(e.pointerId); allSet(p.i, p.v);
+});
+allEl.addEventListener('pointerup', () => { allDrag = null; });
+allEl.addEventListener('pointercancel', () => { allDrag = null; });
+allEl.addEventListener('pointerleave', () => { $('allTip').hidden = true; });
+allEl.addEventListener('pointermove', e => {
+  const p = allPoint(e), tip = $('allTip');
+  if (!p) { tip.hidden = true; return; }
+  if (allDrag != null) { p.i = allDrag; allSet(allDrag, p.v); }
+  if (p.i < 0 || p.i >= p.g.U.length) { tip.hidden = true; return; }
+  tip.textContent = `${p.g.U[p.i].label}: ${p.v}`; tip.hidden = false;
+  tip.style.left = Math.max(0, Math.min(p.g.W - tip.offsetWidth, p.mx - tip.offsetWidth / 2)) + 'px';
+  tip.style.top = Math.max(0, p.my - 34) + 'px';
+});
+$('allView').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.allView = b.dataset.v; save(); schedule(); });
+$('allSwing').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st.swing = +b.dataset.d; save(); schedule(); });
+
+function renderPens(r, li) {
+  $('penSec').hidden = !C.pens.length; if (!C.pens.length) return;
+  const s = st.s, gradeOf = (z) => { const t = course(C, z, st.mode); return t.failed ? 'Fail' : `${floor2(t.total)} ${CUTS[letterIdx(C, t.total)][0]}`; };
+  $('penBig').textContent = r.failed ? 'At this level you fail the course.' : r.ded ? `Deductions take ${fmt(r.ded)} points off your ${floor2(r.base)} base grade.` : `No deductions so far. Your base grade of ${floor2(r.base)} stands.`;
+  const notes = [];
+  $('penTables').innerHTML = C.pens.map(p => {
+    const n = s[p.k] || 0;
+    const levels = p.steps ? [[0, 0], ...p.steps] : Array.from({ length: 6 }, (_, i) => [p.free + i, null]);
+    const rows = levels.map(([t, v], i) => {
+      const nx = levels[i + 1] ? levels[i + 1][0] : null;
+      const label = p.steps ? (nx == null ? `${t}+` : `${t === 0 ? '0' : t} to ${nx - p.step}`) : `${t}`;
+      const cost = v === 'F' ? 'Fail' : p.steps ? (v ? `−${v}` : 'none') : (t > p.free ? `−${p.per * (t - p.free)}` : 'none');
+      const here = p.steps ? (n >= t && (nx == null || n < nx)) : Math.floor(n) === t;
+      return `<tr class="${here ? 'here' : ''}"><td class="g">${label}</td><td>${cost}</td><td>${gradeOf({ ...s, [p.k]: t })}</td></tr>`;
+    }).join('');
+    const nextL = levels.find(l => l[0] > n && (p.steps || l[0] > p.free));
+    if (nextL) notes.push(`${p.name}: ${fmt(nextL[0] - n)} more ${nextL[1] === 'F' ? 'fails the course' : `brings ${gradeOf({ ...s, [p.k]: nextL[0] })}`}.`);
+    return `<div class="tablewrap"><table><thead><tr><th scope="col">${esc(p.name)}</th><th scope="col">Points off</th><th scope="col">Your grade</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+  $('penSub').textContent = notes.join(' ');
+}
+
+/* Map */
+const mapPad = { l: 40, b: 34, t: 10, r: 18 };
+function mapGeom() {
+  const c = $('map'), w = c.clientWidth || 480;
+  return { c, w, h: w, pw: w - mapPad.l - mapPad.r, ph: w - mapPad.t - mapPad.b };
+}
+function renderMap(r) {
+  const { c, w, h, pw, ph } = mapGeom(), dpr = Math.min(2, window.devicePixelRatio || 1), [fa, fb] = C.focus;
+  c.width = w * dpr; c.height = h * dpr;
+  const x = c.getContext('2d'); x.scale(dpr, dpr);
+  x.fillStyle = cssv('--panel'); x.fillRect(0, 0, w, h);
+  const lo = zoom, span = 100 - lo, N = 160, cw = pw / N, ch = ph / N;
+  const s = { ...st.s }, grid = [], colors = CUTS.map(c => cssv('--' + c[2]));
+  const tally = CUTS.map(() => ({ n: 0, x: 0, y: 0 }));
+  for (let j = 0; j < N; j++) { grid[j] = [];
+    for (let i = 0; i < N; i++) {
+      s[fa] = lo + (i + .5) / N * span; s[fb] = lo + (j + .5) / N * span;
+      const li = letterIdx(C, course(C, s, st.mode).total); grid[j][i] = li;
+      const t = tally[li]; t.n++; t.x += i; t.y += j;
+      x.fillStyle = colors[li];
+      x.fillRect(mapPad.l + i * cw, mapPad.t + ph - (j + 1) * ch, cw + .6, ch + .6);
+    } }
+  x.fillStyle = 'rgba(20,35,31,.45)';
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    if (i + 1 < N && grid[j][i] !== grid[j][i + 1]) x.fillRect(mapPad.l + (i + 1) * cw - .5, mapPad.t + ph - (j + 1) * ch, 1, ch + .6);
+    if (j + 1 < N && grid[j][i] !== grid[j + 1][i]) x.fillRect(mapPad.l + i * cw, mapPad.t + ph - (j + 1) * ch - .5, cw + .6, 1);
+  }
+  x.font = `600 ${w < 400 ? 12 : 14}px ${cssv('--mono')}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = cssv('--on-band');
+  tally.forEach((t, li) => {
+    if (t.n < N * N * 0.008) return;
+    const cx = t.x / t.n, cy = t.y / t.n; let best = null, bd = 1e12;
+    for (let j = 0; j < N; j += 2) for (let i = 0; i < N; i += 2) if (grid[j][i] === li) {
+      const m = 7; if (i < m || j < m || i >= N - m || j >= N - m) continue;
+      if (grid[j - m][i] !== li || grid[j + m][i] !== li || grid[j][i - m] !== li || grid[j][i + m] !== li) continue;
+      const d = (i - cx) ** 2 + (j - cy) ** 2; if (d < bd) { bd = d; best = [i, j]; }
+    }
+    if (best) x.fillText(CUTS[li][0], mapPad.l + (best[0] + .5) * cw, mapPad.t + ph - (best[1] + .5) * ch);
+  });
+  x.fillStyle = cssv('--fg2'); x.font = `12px ${cssv('--mono')}`;
+  const step = zoom ? 10 : 20;
+  for (let v = lo; v <= 100; v += step) {
+    const p = (v - lo) / span;
+    x.textAlign = 'center'; x.textBaseline = 'top'; x.fillText(v, mapPad.l + p * pw, mapPad.t + ph + 5);
+    x.textAlign = 'right'; x.textBaseline = 'middle'; x.fillText(v, mapPad.l - 6, mapPad.t + ph - p * ph);
+  }
+  x.font = `600 12px ${cssv('--body')}`; x.textAlign = 'center'; x.textBaseline = 'bottom';
+  x.fillText(NAME[fa], mapPad.l + pw / 2, h - 1);
+  x.save(); x.translate(11, mapPad.t + ph / 2); x.rotate(-Math.PI / 2); x.textBaseline = 'middle'; x.fillText(NAME[fb], 0, 0); x.restore();
+  const inView = st.s[fa] >= lo && st.s[fb] >= lo;
+  if (inView) {
+    const px = mapPad.l + (st.s[fa] - lo) / span * pw, py = mapPad.t + ph - (st.s[fb] - lo) / span * ph;
+    x.beginPath(); x.arc(px, py, 8, 0, 7); x.fillStyle = cssv('--mark-ring'); x.fill();
+    x.beginPath(); x.arc(px, py, 5.5, 0, 7); x.fillStyle = cssv('--mark'); x.fill();
+  }
+  const zone = flatTop(C, st.s, fa, st.mode);
+  $('mapRead').textContent = (inView ? '' : 'Your scores are off this view, so switch to 0–100. ')
+    + (st.graded[fa] || !zone ? '' : `With your ${NAME[fb]} set at ${fmt(st.s[fb])}, any ${NAME[fa]} up to ${fmt(zone)} gives the same grade.`);
+}
+function mapPoint(ev) {
+  const b = $('map').getBoundingClientRect(), { pw, ph } = mapGeom(), span = 100 - zoom;
+  const px = zoom + ((ev.clientX - b.left - mapPad.l) / pw) * span, py = zoom + ((mapPad.t + ph - (ev.clientY - b.top)) / ph) * span;
+  const snap = v => Math.max(zoom, Math.min(100, Math.round(v * 2) / 2));
+  return { x: snap(px), y: snap(py), left: ev.clientX - b.left, top: ev.clientY - b.top, inside: px >= zoom - 2 && px <= 102 && py >= zoom - 2 && py <= 102 };
+}
+let dragging = false;
+const mapEl = $('map');
+mapEl.addEventListener('pointerdown', e => { const p = mapPoint(e); if (!p.inside) return; dragging = true; mapEl.setPointerCapture(e.pointerId); pairSet(p); });
+mapEl.addEventListener('pointerup', () => { dragging = false; });
+mapEl.addEventListener('pointercancel', () => { dragging = false; });
+mapEl.addEventListener('pointerleave', () => { $('mapTip').hidden = true; });
+mapEl.addEventListener('pointermove', e => {
+  const p = mapPoint(e), tip = $('mapTip'), [a, b] = C.focus;
+  if (dragging) pairSet(p);
+  if (!p.inside) { tip.hidden = true; return; }
+  const v = course(C, { ...st.s, [a]: p.x, [b]: p.y }, st.mode).total;
+  tip.textContent = `${NAME[a]} ${p.x} · ${NAME[b]} ${p.y} → ${floor2(v)} ${CUTS[letterIdx(C, v)][0]}`;
+  tip.hidden = false;
+  const box = $('mapBox').clientWidth, tw = tip.offsetWidth;
+  tip.style.left = Math.max(0, Math.min(box - tw, p.left - tw / 2)) + 'px';
+  tip.style.top = Math.max(0, p.top - 34) + 'px';
+});
+
+/* Payoff */
+function renderPayoff(r) {
+  const k = payKey, s = st.s, mode = st.mode, svg = $('payoff'), [fa, fb] = C.focus;
+  const W = $('payoffBox').clientWidth || 640, H = Math.max(280, Math.min(340, W * .5));
+  const P = { l: 44, r: 40, t: 14, b: 40 };
+  const at = v => course(C, { ...s, [k]: v }, mode).total;
+  const pts = []; for (let v = 0; v <= 100; v += .25) pts.push([v, at(v)]);
+  const flatA = k === fa && flatTop(C, { ...s, [fb]: 100 }, fa, mode) > 0;
+  const overlays = flatA ? [70, 100].filter(f => f !== s[fb]).map(f => {
+    const line = []; for (let v = 0; v <= 100; v += .5) line.push([v, course(C, { ...s, [fa]: v, [fb]: f }, mode).total]);
+    return { f, line };
+  }) : [];
+  const ends = [pts[0][1], pts[pts.length - 1][1], ...overlays.flatMap(o => [o.line[0][1], o.line[o.line.length - 1][1]])];
+  let y0 = Math.floor(Math.min(...ends)) - 2, y1 = Math.ceil(Math.max(...ends)) + 2;
+  y0 = Math.max(0, y0); y1 = Math.min(100, y1);
+  if (y1 - y0 < 8) { y1 = Math.min(100, y0 + 8); y0 = y1 - 8; }
+  const X = v => P.l + v / 100 * (W - P.l - P.r), Y = v => H - P.b - (v - y0) / (y1 - y0) * (H - P.t - P.b);
+  let h = '';
+  CUTS.forEach((c, i) => {
+    const hi = i ? CUTS[i - 1][1] : 100, loB = c[1];
+    const a = Math.max(loB, y0), b = Math.min(hi, y1); if (b <= a) return;
+    h += `<rect x="${P.l}" y="${Y(b)}" width="${W - P.l - P.r}" height="${Y(a) - Y(b)}" fill="var(--${c[2]})" opacity=".42"/>`;
+    if (Y(a) - Y(b) >= 13) h += `<text x="${W - P.r + 6}" y="${(Y(a) + Y(b)) / 2 + 4}" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${esc(c[0])}</text>`;
+    if (loB > y0 && loB < y1) h += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(loB)}" y2="${Y(loB)}" stroke="var(--panel)" stroke-width="1"/>`;
+  });
+  for (let v = 0; v <= 100; v += 20) h += `<text x="${X(v)}" y="${H - P.b + 16}" text-anchor="middle" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${v}</text>`;
+  const ys = (y1 - y0) > 20 ? 10 : 5;
+  for (let v = Math.ceil(y0 / ys) * ys; v <= y1; v += ys) h += `<text x="${P.l - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="12" font-family="var(--mono)" fill="var(--fg2)">${v}</text>`;
+  h += `<text x="${(P.l + W - P.r) / 2}" y="${H - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--fg2)">${esc(NAME[k])} score</text>`;
+  const seg = [];
+  for (let i = 1; i < pts.length; i++) {
+    const sl = (pts[i][1] - pts[i - 1][1]) / .25;
+    const last = seg[seg.length - 1];
+    if (last && Math.abs(last.sl - sl) < .002) last.b = pts[i][0];
+    else seg.push({ a: pts[i - 1][0], b: pts[i][0], sl });
+  }
+  const clean = seg.filter(g => g.b - g.a > .6);
+  clean.forEach((g, i) => { if (i) g.a = clean[i - 1].b; });
+  clean.slice(1).forEach(g => { h += `<line x1="${X(g.a)}" x2="${X(g.a)}" y1="${P.t}" y2="${H - P.b}" stroke="var(--fg2)" stroke-width="1" stroke-dasharray="3 3"/>`; });
+  overlays.forEach(o => {
+    h += `<path d="M${o.line.map(p => `${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('L')}" fill="none" stroke="var(--fg2)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    h += `<text x="${X(3)}" y="${Y(o.line[0][1]) + (o.f === 100 ? -6 : 15)}" font-size="12" font-weight="600" fill="var(--fg)">If ${esc(NAME[fb])} is ${o.f}</text>`;
+  });
+  h += `<path d="M${pts.map(p => `${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join('L')}" fill="none" stroke="var(--fg)" stroke-width="2" stroke-linejoin="round"/>`;
+  h += `<circle cx="${X(s[k])}" cy="${Y(r.total)}" r="7" fill="var(--mark-ring)"/><circle cx="${X(s[k])}" cy="${Y(r.total)}" r="5" fill="var(--mark)"/>`;
+  h += `<line id="payCross" x1="0" x2="0" y1="${P.t}" y2="${H - P.b}" stroke="var(--fg)" stroke-width="1" opacity="0"/>`;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H);
+  svg.innerHTML = h;
+  svg._geo = { X, P, W, at };
+  const held = k === fa ? `Solid line uses your ${NAME[fb]} of ${fmt(s[fb])}.${overlays.length ? ` The dashed lines show other ${NAME[fb]}s.` : ''}`
+    : k === fb ? `This uses your ${NAME[fa]} of ${fmt(s[fa])}, so the kink moves if ${NAME[fa]} changes.`
+    : `This uses your ${NAME[fa]} of ${fmt(s[fa])} and ${NAME[fb]} of ${fmt(s[fb])}.`;
+  $('payRead').textContent = clean.length > 4 ? held : `${held} ${clean.map(g => `${fmt(g.a)} to ${fmt(g.b)}: each point adds ${g.sl.toFixed(2)}`).join('. ')}.`;
+}
+const payEl = $('payoffBox');
+payEl.addEventListener('pointermove', e => {
+  const g = $('payoff')._geo; if (!g) return;
+  const b = payEl.getBoundingClientRect(), mx = e.clientX - b.left, v = Math.round(((mx - g.P.l) / (g.W - g.P.l - g.P.r)) * 200) / 2;
+  const tip = $('payTip'), line = $('payCross');
+  if (v < 0 || v > 100) { tip.hidden = true; line.setAttribute('opacity', 0); return; }
+  const c = g.at(v); line.setAttribute('x1', g.X(v)); line.setAttribute('x2', g.X(v)); line.setAttribute('opacity', .5);
+  tip.textContent = `${NAME[payKey]} ${v} → ${floor2(c)} ${CUTS[letterIdx(C, c)][0]}`; tip.hidden = false;
+  tip.style.left = Math.max(0, Math.min(g.W - tip.offsetWidth, mx - tip.offsetWidth / 2)) + 'px'; tip.style.top = '6px';
+});
+payEl.addEventListener('pointerleave', () => { $('payTip').hidden = true; const l = $('payCross'); if (l) l.setAttribute('opacity', 0); });
+
+function renderLever(r) {
+  const s = st.s, mode = st.mode, keys = pool();
+  const by = C.replace ? C.replace.by : null, repCat = C.replace && C.cats.find(x => x.id === C.replace.cat);
+  const biggest = Math.max(...Object.values(WT)) / 100;
+  const denom = Math.max(biggest, by ? (WT[by] + repCat.weight / repCat.items.length) / 100 : 0, C.link ? (WT[C.link.k] + C.cats.find(x => x.id === C.bestOf.cat).weight) / 100 : 0) + .03;
+  let rows = keys.map(k => {
+    const v = nextPoint(C, s, k, mode), cat = catOf(C, k), n = cat ? cat.items.length : 1; let why;
+    if (s[k] >= 100) why = 'Already at full credit.';
+    else if (C.link && k === C.link.k) why = v > WT[k] / 100 + .01 ? `Counts as ${onName(k)} and lifts any midterm it beats.` : `Counts as ${onName(k)} only, since it isn't above any midterm yet.`;
+    else if (k === by) {
+      const word = singular(repCat.name);
+      why = v > WT[by] / 100 + .01 ? `Counts as ${onName(by)} and replaces your lowest ${word}.` : `Counts as ${onName(by)} only, since it is not above your lowest ${word} yet.`;
+    } else if (v < 1e-9 && cat.curved && C.curve) why = `Already capped at ${C.curve.cap} after the scale-up.`;
+    else if (v < 1e-9 && repCat && cat.id === repCat.id) why = `Free zone: ${onName(by)} replaces it until you pass ${fmt(flatTop(C, s, k, mode))}.`;
+    else if (v < 1e-9 && C.bestOf && cat.id === C.bestOf.cat) why = `Its ${singular(C.link.n)} section is higher, so this adds nothing until you pass ${fmt(flatTop(C, s, k, mode))}.`;
+    else if (v < 1e-9) why = 'Dropped right now, so more points here add nothing yet.';
+    else if (cat.curved && C.curve) why = `${pct(cat.weight / n)} weight, boosted by the scale-up.`;
+    else if (n > 1) why = `Counts as one of your ${WORDS[n] || n} ${cat.name.toLowerCase()}.`;
+    else why = `Straight ${pct(cat.weight)} weight.`;
+    if (OUT[k]) why += ` A point here means 1% of the ${OUT[k]}-point score.`;
+    return { k, v, why, label: NAME[k], cat };
+  });
+  const seen = {};
+  rows = rows.sort((a, b) => Math.round(b.v * 1e6) - Math.round(a.v * 1e6)).filter(o => {
+    if (!o.cat || o.cat.items.length < 4) return true;
+    if (seen[o.cat.id]) return false;
+    seen[o.cat.id] = true; o.label = `${o.cat.name}: best is ${NAME[o.k]}`; return true;
+  });
+  $('lever').innerHTML = rows.map(o => `<div class="bar"><span class="nm">${esc(o.label)}</span><span class="tr"><i style="width:${Math.min(100, o.v / denom * 100)}%"></i></span><span class="v">+${o.v.toFixed(2)}</span><span class="why">${esc(o.why)}</span></div>`).join('');
+}
+
+function renderLuck(li) {
+  const keys = scopeKeys(), sig = +$('sigma').value;
+  $('sigmaV').textContent = '±' + sig;
+  $('luckLede').textContent = `This runs 5,000 versions of the semester with ${keys.length === 1 ? onName(keys[0]) : keys.length === 2 ? `${NAME[keys[0]]} and ${NAME[keys[1]]}` : `your ${keys.length} ungraded scores`} landing on a bell curve around the scores you set.`;
+  const p = simulate(C, st.s, keys, sig, st.mode, 5000);
+  const rows = p.map((v, i) => [v, i]).filter(x => x[0] >= .005);
+  const top = Math.max(...rows.map(x => x[0]));
+  $('luck').innerHTML = rows.map(([v, i]) => `<div class="bar prob"><span class="nm">${esc(CUTS[i][0])}</span><span class="tr" style="--swatch:${bandVar(i)}"><i style="width:${v / top * 100}%"></i></span><span class="v">${Math.round(v * 100)}%</span></div>`).join('');
+  const atLeast = p.slice(0, li + 1).reduce((a, b) => a + b, 0);
+  $('luckRead').textContent = `${Math.round(atLeast * 100)}% chance of ${CUTS[li][0]} or better. This is a rough model. Each score swings on its own, so a good day on one doesn't lift the others.`;
+}
+
+/* Class picker */
+$('classSel').addEventListener('change', e => { closeEditor(); useClass(e.target.value); save(); schedule(); });
+function exportable(c) { const { name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round } = c; return { titrator: 2, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round }; }
+const EXAMPLE_CSV = () => cfgToCsv(normCfg({
+  name: 'Physics 141', title: 'General Physics', semester: 'Fall 2026', prof: 'Prof. Example', univ: 'Example University', source: 'Fall 2026 syllabus',
+  dates: [['Midterm 2', 'Oct 20'], ['Final', 'Dec 12']],
+  cats: [
+    { id: 'c0', name: 'Midterms', weight: 40, items: ['Midterm 1', 'Midterm 2'].map((n, i) => ({ k: 'c0_' + i, n, sh: 'M' + (i + 1), exam: true })) },
+    { id: 'c1', name: 'Final', weight: 30, items: [{ k: 'c1_0', n: 'Final', sh: 'Final', exam: true }] },
+    { id: 'c2', name: 'Homework', weight: 20, drop: 1, items: Array.from({ length: 10 }, (_, i) => ({ k: 'c2_' + i, n: `Homework ${i + 1}`, sh: 'H' + (i + 1) })) },
+    { id: 'c3', name: 'Participation', weight: 10, outOf: 25, curved: true, items: [{ k: 'c3_0', n: 'Participation', sh: 'Part' }] }
+  ],
+  replace: { by: 'c1_0', cat: 'c0' }, curve: { mult: 1.05, plus: null, cap: 100 }, focus: ['c0_1', 'c1_0'], scale: CSV_SCALE, round: 0,
+  pens: [{ name: 'Absences', step: 1, steps: [[4, 3], [8, 'F']] }], slides: true
+}));
+function copyText(t, msg) {
+  $('codeText').value = t; codePreview();
+  const done = () => { $('codeNote').textContent = msg; };
+  if (navigator.clipboard) navigator.clipboard.writeText(t).then(done).catch(() => { $('codeText').select(); $('codeNote').textContent = 'Press copy on your keyboard to copy the selected text.'; });
+  else $('codeText').select();
+}
+function readImport(text) {
+  const t = text.trim();
+  return normCfg(t.startsWith('{') ? JSON.parse(t) : csvToCfg(t));
+}
+function codePreview() {
+  const box = $('codePreview'), t = $('codeText').value.trim();
+  box.hidden = !t || $('codeBox').dataset.mode !== 'import';
+  if (box.hidden) return;
+  try {
+    const c = readImport(t), sum = c.cats.reduce((a, x) => a + x.weight, 0), n = allItems(c).length;
+    const warn = Math.abs(sum - 100) > .01 ? ` Weights add up to ${pct(sum)}, so they will be rescaled to 100%.` : '';
+    box.textContent = `Ready: ${c.name}, ${c.cats.length} categories, ${n} scores, ${c.scale.length} grades.${warn}`;
+    $('codeAdd').disabled = false;
+  } catch (e) {
+    box.textContent = e instanceof SyntaxError ? "That doesn't look like a class code. Copy the whole thing and try again." : e.message;
+    $('codeAdd').disabled = true;
+  }
+}
+function openCode(mode) {
+  const box = $('codeBox'), imp = mode === 'import';
+  box.hidden = false; box.dataset.mode = mode;
+  $('importTools').hidden = !imp; $('shareTools').hidden = imp; $('csvHelp').hidden = !imp; $('codeAdd').hidden = !imp;
+  $('codeText').value = ''; $('codeFile').value = ''; $('codePreview').hidden = true;
+  $('codeNote').textContent = imp ? 'Choose a CSV file or paste one here. A class code works too. It saves for you only, in this browser.' : 'Share a class setup. CSV opens in any spreadsheet, and a class code is shorter to send. Neither includes your scores.';
+  if (imp) $('codeAdd').disabled = true;
+}
+$('codeText').addEventListener('input', codePreview);
+$('codeFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 200000) { $('codeNote').textContent = 'That file is too big to be a class setup.'; return; }
+  const rd = new FileReader();
+  rd.onload = () => { $('codeText').value = String(rd.result); codePreview(); };
+  rd.onerror = () => { $('codeNote').textContent = "That file couldn't be read. Try pasting its contents here instead."; };
+  rd.readAsText(f);
+});
+$('tplCopy').addEventListener('click', () => { const t = EXAMPLE_CSV(); $('codeText').value = t; codePreview(); if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => { $('codeNote').textContent = 'Template copied. Paste it into a spreadsheet, or edit it here.'; }).catch(() => {}); });
+$('shareCsv').addEventListener('click', () => copyText(cfgToCsv(BASE), 'CSV copied. It holds the class setup, never your scores.'));
+$('shareCode').addEventListener('click', () => copyText(JSON.stringify(exportable(BASE)), 'Class code copied. It holds the class setup, never your scores.'));
+$('btnCopy').addEventListener('click', () => openCode('share'));
+$('btnPaste').addEventListener('click', () => openCode('import'));
+$('codeClose').addEventListener('click', () => { $('codeBox').hidden = true; });
+function newId() { return 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36); }
+function addClass(cfg) {
+  const id = newId(), c = { ...cfg, id };
+  store.classes[id] = c; store.order.push(id);
+  return id;
+}
+$('codeAdd').addEventListener('click', () => {
+  try {
+    const c = readImport($('codeText').value);
+    if (!c.source) c.source = `Imported ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+    const id = addClass(c);
+    $('codeBox').hidden = true; useClass(id); save(); schedule();
+  } catch (e) { $('codePreview').hidden = false; $('codePreview').textContent = e.message; }
+});
+
+/* Class settings */
+let draft = null, edCounter = 0;
+function fromCfg(c) {
+  const d = clone(c);
+  d.cats.forEach(x => { x.count = x.items.length; x.exam = x.items.some(i => i.exam); x.sig = x.name + '|' + x.count; x.iw = x.items.every(i => (i.w || 1) === 1) ? '' : x.items.map(i => i.w).join(', '); });
+  return d;
+}
+const TEMPLATE = () => ({
+  id: '', name: '', title: '', semester: '', prof: '', univ: '', source: '', tagline: '', dates: [], pens: [], penCap: null, slides: false, bestOf: null,
+  cats: [
+    { id: 'mid', name: 'Midterms', weight: 40, drop: 0, curved: false, items: [{ k: 'mid_0', n: 'Midterm 1', sh: 'M1', exam: true }, { k: 'mid_1', n: 'Midterm 2', sh: 'M2', exam: true }] },
+    { id: 'fin', name: 'Final', weight: 30, drop: 0, curved: false, items: [{ k: 'fin_0', n: 'Final', sh: 'Final', exam: true }] },
+    { id: 'hw', name: 'Homework', weight: 30, drop: 0, curved: false, items: [{ k: 'hw_0', n: 'Homework', sh: 'HW', exam: false }] }
+  ],
+  replace: null, curve: null, focus: ['mid_1', 'fin_0'], scale: PLUSMINUS.map(r => r.slice()), round: 0
+});
+function openEditor(c, isNew) {
+  draft = fromCfg(c); draft.isNew = !!isNew;
+  $('editor').hidden = false; $('edMsg').hidden = true;
+  const builtin = !isNew && !!BASE.builtin;
+  $('edTitle').textContent = isNew ? 'New class' : builtin ? `Edit a copy of ${C.name}` : `Edit ${C.name}`;
+  $('edSave').textContent = isNew || builtin ? 'Save as new class' : 'Save class';
+  $('edDelete').hidden = isNew || builtin;
+  $('edName').value = isNew ? '' : builtin ? `${c.name} copy` : c.name;
+  $('edTag').value = c.tagline || '';
+  $('edCT').value = c.title || ''; $('edSem').value = c.semester || ''; $('edProf').value = c.prof || ''; $('edUni').value = c.univ || ''; $('edSrc').value = c.source || '';
+  $('edPens').value = (c.pens || []).map(p => `${p.name}${p.step && p.step !== 1 ? ` (step ${p.step})` : ''}: ${p.steps ? p.steps.map(r => `${r[0]}=${r[1]}`).join(', ') : `${p.per} per after ${p.free}`}`).join('\n');
+  $('edPenCap').value = c.penCap ?? '';
+  $('edSlides').checked = !!c.slides;
+  $('edDates').value = (c.dates || []).map(d => `${d[0]}: ${d[1]}`).join('\n');
+  $('edScale').value = c.scale.map(r => `${r[0]} ${r[1]}`).join('\n');
+  $('edRound').value = String(c.round || 0);
+  $('edMult').value = c.curve && c.curve.mult != null ? c.curve.mult : '';
+  $('edPlus').value = c.curve && c.curve.plus != null ? c.curve.plus : '';
+  $('edCap').value = c.curve ? c.curve.cap : 100;
+  edRender();
+  $('editor').scrollIntoView({ block: 'start' });
+  $('edName').focus({ preventScroll: true });
+}
+function closeEditor() { $('editor').hidden = true; draft = null; }
+function edRender() {
+  $('edCats').innerHTML = draft.cats.map((x, i) => `<tr>
+    <td><input type="text" id="ec_name_${i}" data-i="${i}" data-f="name" value="${esc(x.name)}" maxlength="40" aria-label="Category name"></td>
+    <td><input type="number" id="ec_w_${i}" data-i="${i}" data-f="weight" value="${x.weight}" min="0" max="100" step="any" aria-label="${esc(x.name)} weight"></td>
+    <td><input type="number" id="ec_n_${i}" data-i="${i}" data-f="count" value="${x.count}" min="1" max="30" step="1" aria-label="${esc(x.name)} number of scores"></td>
+    <td><input type="number" id="ec_d_${i}" data-i="${i}" data-f="drop" value="${x.drop || 0}" min="0" max="29" step="1" aria-label="${esc(x.name)} drop lowest"></td>
+    <td><input type="number" id="ec_o_${i}" data-i="${i}" value="${x.outOf ?? ''}" min="1" step="any" placeholder="%" aria-label="${esc(x.name)} out of"></td>
+    <td><input type="text" id="ec_iw_${i}" data-i="${i}" value="${esc(x.iw || '')}" placeholder="equal" aria-label="${esc(x.name)} score weights"></td>
+    <td class="c"><input type="checkbox" id="ec_c_${i}" data-i="${i}" data-f="curved" ${x.curved ? 'checked' : ''} aria-label="${esc(x.name)} gets scale-up"></td>
+    <td class="c"><input type="checkbox" id="ec_x_${i}" data-i="${i}" data-f="exam" ${x.exam ? 'checked' : ''} aria-label="${esc(x.name)} is an exam"></td>
+    <td><button class="btn small" id="ec_del_${i}" data-del="${i}" type="button" aria-label="Remove ${esc(x.name)}">Remove</button></td></tr>`).join('');
+  edRefresh();
+}
+function genItems(x) {
+  const n = Math.max(1, Math.min(30, Math.round(x.count) || 1)), sig = x.name + '|' + n;
+  if (sig === x.sig) return;
+  const sing = x.name.replace(/s$/i, ''), items = [];
+  for (let i = 0; i < n; i++) {
+    const old = x.items[i];
+    items.push({ k: old ? old.k : `${x.id}_${i}_${++edCounter}`, n: n > 1 ? `${sing} ${i + 1}` : x.name, sh: n > 1 ? `${sing[0] || 'S'}${i + 1}` : x.name.slice(0, 5), exam: x.exam });
+  }
+  x.items = items; x.sig = sig;
+}
+function edRead() {
+  draft.cats.forEach((x, i) => {
+    x.name = $('ec_name_' + i).value.trim();
+    x.weight = parseFloat($('ec_w_' + i).value) || 0;
+    x.count = parseInt($('ec_n_' + i).value, 10) || 1;
+    x.drop = Math.max(0, Math.min(x.count - 1, parseInt($('ec_d_' + i).value, 10) || 0));
+    x.curved = $('ec_c_' + i).checked;
+    x.exam = $('ec_x_' + i).checked;
+    x.outOf = $('ec_o_' + i).value.trim();
+    x.iw = $('ec_iw_' + i).value.trim();
+    genItems(x);
+    const iw = x.iw ? x.iw.split(/[\s,]+/).filter(Boolean).map(Number) : [];
+    x.items.forEach((it, j) => { it.exam = x.exam; it.w = iw.length === x.items.length && iw[j] > 0 ? iw[j] : 1; });
+  });
+}
+function edRefresh() {
+  const keep = id => $(id).value;
+  const opts = (list, none) => (none ? `<option value="">${none}</option>` : '') + list.map(o => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join('');
+  const items = draft.cats.flatMap(x => x.items.map(i => [i.k, i.n])), multi = draft.cats.filter(x => x.items.length > 1).map(x => [x.id, x.name]);
+  const was = { by: draft.replace ? draft.replace.by : '', cat: draft.replace ? draft.replace.cat : '', a: draft.focus[0], b: draft.focus[1], bc: draft.bestOf ? draft.bestOf.cat : '', bb: draft.bestOf ? draft.bestOf.by : '' };
+  const set = (id, v, html) => { $(id).innerHTML = html; $(id).value = v; if ($(id).selectedIndex < 0) $(id).selectedIndex = 0; };
+  set('edRepBy', was.by, opts(items, 'No replacement'));
+  set('edRepCat', was.cat, opts(multi.length ? multi : draft.cats.map(x => [x.id, x.name])));
+  set('edBestCat', was.bc, opts(draft.cats.map(x => [x.id, x.name]), 'No better-of rule'));
+  set('edBestBy', was.bb, opts(draft.cats.map(x => [x.id, x.name])));
+  const pick = was.bc ? [...items, [was.bb + '_all', (draft.cats.find(x => x.id === was.bb) || { name: 'Final' }).name + ' (all sections)']] : items;
+  set('edA', was.a, opts(pick)); set('edB', was.b, opts(pick));
+  const sum = draft.cats.reduce((a, x) => a + (x.weight || 0), 0);
+  $('edSum').textContent = Math.abs(sum - 100) < .01 ? 'Weights add up to 100%.' : `Weights add up to ${pct(sum)}. They will be rescaled to 100%.`;
+}
+function edPickups() {
+  const by = $('edRepBy').value;
+  draft.replace = by ? { by, cat: $('edRepCat').value } : null;
+  draft.focus = [$('edA').value, $('edB').value];
+  const bc = $('edBestCat').value;
+  draft.bestOf = bc ? { cat: bc, by: $('edBestBy').value } : null;
+}
+$('edCats').addEventListener('input', () => { edRead(); edRefreshSum(); });
+function edRefreshSum() { const sum = draft.cats.reduce((a, x) => a + (x.weight || 0), 0); $('edSum').textContent = Math.abs(sum - 100) < .01 ? 'Weights add up to 100%.' : `Weights add up to ${pct(sum)}. They will be rescaled to 100%.`; }
+$('edCats').addEventListener('change', () => { edRead(); edPickups(); edRefresh(); });
+$('edCats').addEventListener('click', e => {
+  const b = e.target.closest('[data-del]'); if (!b) return;
+  edRead(); edPickups(); draft.cats.splice(+b.dataset.del, 1); edRender();
+});
+$('edAddCat').addEventListener('click', () => {
+  edRead(); edPickups();
+  const id = `cat${Date.now().toString(36)}${++edCounter}`;
+  draft.cats.push({ id, name: 'New category', weight: 0, drop: 0, curved: false, exam: false, count: 1, sig: '', items: [] });
+  genItems(draft.cats[draft.cats.length - 1]);
+  edRender();
+});
+['edBestCat', 'edBestBy'].forEach(id => $(id).addEventListener('change', () => { edRead(); edPickups(); edRefresh(); }));
+function parsePens(t) {
+  return t.split('\n').map(l => l.trim()).filter(Boolean).map((l, i) => {
+    const m = l.match(/^(.+?)(?:\s*\(step\s+([\d.]+)\))?\s*:\s*(.+)$/);
+    if (!m) throw new Error(`Couldn't read the deduction line "${l}". Try Absences: 4=5, 6=15, 8=F or Late days: 5 per after 3.`);
+    const per = m[3].match(/^([\d.]+)\s+per\s+after\s+([\d.]+)$/i), k = `pen_${i}`;
+    if (per) return { k, name: m[1], step: +m[2] || 1, per: +per[1], free: +per[2] };
+    const steps = m[3].split(',').map(p => { const q = p.trim().match(/^([\d.]+)\s*=\s*(F|[\d.]+)$/i); if (!q) throw new Error(`Couldn't read "${p.trim()}" in the deduction line. Use 4=5 or 8=F.`); return [+q[1], q[2].toUpperCase() === 'F' ? 'F' : +q[2]]; });
+    return { k, name: m[1], step: +m[2] || 1, steps };
+  });
+}
+$('edPlusMinus').addEventListener('click', () => { $('edScale').value = PLUSMINUS.map(r => `${r[0]} ${r[1]}`).join('\n'); });
+$('edPlain').addEventListener('click', () => { $('edScale').value = PLAIN.map(r => `${r[0]} ${r[1]}`).join('\n'); });
+function parseScale(t) {
+  const rows = t.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean).map(l => {
+    const m = l.match(/^(.+?)[\s:=]+(\d+(?:\.\d+)?)\s*%?\+?$/);
+    if (!m) throw new Error(`Couldn't read the grade scale line "${l}". Use a letter then a number, like A 93.`);
+    return [m[1].trim(), parseFloat(m[2])];
+  });
+  if (rows.length && !rows.some(r => r[1] === 0)) rows.push(['F', 0]);
+  return rows;
+}
+$('edSave').addEventListener('click', () => {
+  try {
+    edRead(); edPickups();
+    const mult = $('edMult').value.trim(), plus = $('edPlus').value.trim();
+    const wasBuiltin = !draft.isNew && !!BASE.builtin;
+    const raw = {
+      ...draft, name: $('edName').value, tagline: $('edTag').value, title: $('edCT').value, semester: $('edSem').value, prof: $('edProf').value, univ: $('edUni').value, source: $('edSrc').value,
+      pens: parsePens($('edPens').value), penCap: $('edPenCap').value, slides: $('edSlides').checked,
+      dates: $('edDates').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf(':'); return i < 0 ? [l, ''] : [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }),
+      scale: parseScale($('edScale').value), round: +$('edRound').value,
+      curve: mult || plus ? { mult: mult ? +mult : null, plus: plus ? +plus : null, cap: +$('edCap').value || 100 } : null
+    };
+    const c = normCfg(raw);
+    for (const x of draft.cats) if (x.iw && x.iw.split(/[\s,]+/).filter(Boolean).length !== x.items.length) throw new Error(`${x.name} has ${x.items.length} scores, so it needs ${x.items.length} score weights.`);
+    if (draft.cats.some(x => x.curved) && !c.curve) throw new Error('Enter a scale-up amount, or uncheck Scale-up on every category.');
+    const prev = st;
+    if (draft.isNew || wasBuiltin) {
+      const id = addClass(c);
+      if (wasBuiltin) store.scores[id] = clone(prev);
+      closeEditor(); useClass(id);
+    } else {
+      c.id = C.id; store.classes[C.id] = c;
+      const id = C.id; closeEditor(); useClass(id);
+    }
+    save(); schedule();
+  } catch (e) { $('edMsg').textContent = e.message; $('edMsg').hidden = false; }
+});
+$('edCancel').addEventListener('click', closeEditor);
+let delArmed = false;
+$('edDelete').addEventListener('click', () => {
+  if (!delArmed) { delArmed = true; $('edDelete').textContent = 'Click again to delete'; setTimeout(() => { delArmed = false; $('edDelete').textContent = 'Delete this class'; }, 3000); return; }
+  delArmed = false; $('edDelete').textContent = 'Delete this class';
+  const id = C.id; delete store.classes[id]; delete store.scores[id]; store.order = store.order.filter(x => x !== id);
+  closeEditor(); useClass('chem101'); save(); schedule();
+});
+$('btnEdit').addEventListener('click', () => openEditor(BASE, false));
+$('btnNew').addEventListener('click', () => openEditor(TEMPLATE(), true));
+
+useClass(store.active); render();
+window.addEventListener('resize', schedule);
+if (window.ResizeObserver) new ResizeObserver(schedule).observe($('mapBox'));
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', schedule); } catch (e) {}
+new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+
+/* Shared classes: every CSV in the site's classes folder, listed by classes/index.json. */
+(async () => {
+  const wanted = store.wanted, res = await fetch('classes/index.json', { cache: 'no-cache' });
+  if (!res.ok) return;
+  const list = await res.json();
+  if (!Array.isArray(list)) return;
+  const loaded = await Promise.all(list.filter(f => typeof f === 'string' && /\.csv$/i.test(f) && !/[\\/]|\.\./.test(f)).map(async f => {
+    try {
+      const r = await fetch('classes/' + encodeURIComponent(f), { cache: 'no-cache' });
+      if (!r.ok) throw new Error('not found');
+      const id = 'pub_' + f.replace(/\.csv$/i, '').replace(/[^\w-]/g, '-').slice(0, 40);
+      return { ...normCfg(csvToCfg(await r.text())), id, builtin: true };
+    } catch (e) { console.warn(`Skipped classes/${f}: ${e.message}`); return null; }
+  }));
+  for (const c of loaded) if (c) BUILTIN[c.id] = c;
+  if (wanted && BUILTIN[wanted] && C.id === 'chem101') useClass(wanted); else fillClassSel();
+  schedule();
+})().catch(() => {});
+
+/* Account sync: private to each signed-in viewer. Without it the page runs on browser storage alone. */
+(async () => {
+  if (!window.claude || !window.claude.use) return;
+  const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+  if (!db || !user) return;
+  const id = await user.id(); if (!id) return;
+  const ref = db.collection('data/users/' + id).doc('titrator');
+  const snap = await ref.get();
+  remote = ref;
+  if (snap.exists) {
+    const d = snap.data();
+    if (d && typeof d.json === 'string' && (d.savedAt || 0) > (store.savedAt || 0)) {
+      store = cleanStore(JSON.parse(d.json));
+      try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {}
+      useClass(store.active);
+    }
+  }
+  schedule();
+})().catch(() => {});
+</script>
+</body>
+</html>

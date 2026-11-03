@@ -2253,11 +2253,11 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
   if (!res.ok) return;
   const list = await res.json();
   if (!Array.isArray(list)) return;
-  const loaded = await Promise.all(list.filter(f => /^[\w.-]+\.csv$/.test(f)).map(async f => {
+  const loaded = await Promise.all(list.filter(f => typeof f === 'string' && /\.csv$/i.test(f) && !/[\\/]|\.\./.test(f)).map(async f => {
     try {
       const r = await fetch('classes/' + encodeURIComponent(f), { cache: 'no-cache' });
       if (!r.ok) throw new Error('not found');
-      const id = 'pub_' + f.replace(/\.csv$/, '').replace(/[^\w-]/g, '-').slice(0, 40);
+      const id = 'pub_' + f.replace(/\.csv$/i, '').replace(/[^\w-]/g, '-').slice(0, 40);
       return { ...normCfg(csvToCfg(await r.text())), id, builtin: true };
     } catch (e) { console.warn(`Skipped classes/${f}: ${e.message}`); return null; }
   }));

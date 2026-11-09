@@ -333,6 +333,7 @@ body:not(.specmode) #specSec { display: none }
           <thead><tr><th scope="col">kind</th><th scope="col">Fill in</th></tr></thead>
           <tbody>
             <tr><td>category</td><td>name, weight, and optionally scores, drop, out_of, score_weights (1;1;2), scale_up (yes), exam (yes), score_names (Quiz A;Quiz B)</td></tr>
+            <tr><td>mode</td><td>name is the selector label and value is its short ID. Put that ID in the mode column of rows that apply only to this choice.</td></tr>
             <tr><td>grade</td><td>name is the letter, value is its minimum. Leave these out to use the A+ to F scale.</td></tr>
             <tr><td>date</td><td>name and value, like Final and Dec 9</td></tr>
             <tr><td>criterion</td><td>for all-or-nothing grading: name, value like A=5; B=4; C=3, and optionally out_of and score_names. Add the setting plus_minus for plus and minus rules.</td></tr>
@@ -429,6 +430,10 @@ Late days: 5 per after 3"></textarea></label>
       <div class="opt" id="slideBox">
         <label class="groupl" for="slide">If the cutoffs slide down</label>
         <div class="sim" style="max-width:none"><input type="range" id="slide" min="0" max="5" step="0.5" value="0" style="grid-column:1 / span 2"><span class="mono" id="slideV">none</span></div>
+      </div>
+      <div class="opt" id="policyBox">
+        <span class="groupl">Grading policy</span>
+        <div class="btns" id="policyBtns"></div>
       </div>
       <div class="opt" id="scopeBox">
         <span class="groupl">Try buttons and luck use</span>
@@ -830,7 +835,13 @@ function normCfg(x) {
   const notes = (Array.isArray(x.notes) ? x.notes : []).slice(0, 12).map(r => [str(r[0], 40), str(r[1], 400)]).filter(r => r[0] || r[1]);
   const dates = (Array.isArray(x.dates) ? x.dates : []).slice(0, 12).map(d => [str(d[0], 40), str(d[1], 40)]).filter(d => d[0] || d[1]);
   const round = [0, .5, 1].includes(+x.round) ? +x.round : 0;
-  return { id: /^[\w-]{1,40}$/.test(x.id || '') ? x.id : '', name, title: str(x.title, 80), semester: str(x.semester, 30), prof: str(x.prof, 60), univ: str(x.univ, 60), source: str(x.source, 120), tagline: str(x.tagline, 300), dates, notes, cats, replace, bestOf, link, pens, penCap, slides: !!x.slides, curve, focus, scale, round, spec };
+  const out = { id: /^[\w-]{1,40}$/.test(x.id || '') ? x.id : '', name, title: str(x.title, 80), semester: str(x.semester, 30), prof: str(x.prof, 60), univ: str(x.univ, 60), source: str(x.source, 120), tagline: str(x.tagline, 300), dates, notes, cats, replace, bestOf, link, pens, penCap, slides: !!x.slides, curve, focus, scale, round, spec };
+  if (Array.isArray(x.modes)) {
+    const modes = x.modes.slice(0, 8).map(m => ({ id: str(m && m.id, 30), name: str(m && m.name, 50), cfg: normCfg({ ...(m && typeof m.cfg === 'object' ? m.cfg : {}), modes: null }) }));
+    if (modes.length < 2 || modes.some(m => !/^[\w-]+$/.test(m.id) || !m.name) || new Set(modes.map(m => m.id)).size !== modes.length) throw new Error('Grading modes need unique names and IDs.');
+    out.modes = modes;
+  }
+  return out;
 }
 /* Course total with one group of scores pushed down and up by d points, or across 0 to 100 when d is 0. */
 function swingRange(c, s, keys, d, read) {
@@ -878,7 +889,7 @@ function specRoutes(sp, s, rank) {
   const effort = x => sp.cols.reduce((a, c) => a + (x[c.k] - s[c.k]) / c.max, 0);
   return found.sort((x, y) => changed(x) - changed(y) || effort(x) - effort(y));
 }
-const CSV_HEAD = ['kind', 'name', 'value', 'weight', 'scores', 'drop', 'out_of', 'score_weights', 'scale_up', 'exam', 'score_names', 'step'];
+const CSV_HEAD = ['kind', 'name', 'value', 'weight', 'scores', 'drop', 'out_of', 'score_weights', 'scale_up', 'exam', 'score_names', 'step', 'mode'];
 const CSV_SCALE = [['A+', 97], ['A', 93], ['A−', 90], ['B+', 87], ['B', 83], ['B−', 80], ['C+', 77], ['C', 73], ['C−', 70], ['D+', 67], ['D', 63], ['D−', 60], ['F', 0]];
 function parseCsv(text) {
   const t = String(text).replace(/^﻿/, ''), first = t.split(/\r?\n/, 1)[0];
@@ -900,7 +911,7 @@ function parseCsv(text) {
   return rows;
 }
 /* Turns a class CSV into a raw class. normCfg still checks the result. */
-function csvToCfg(text) {
+function csvToCfgSingle(text, chosenMode) {
   if (String(text).length > 200000) throw new Error('That file is too big to be a class setup.');
   const all = parseCsv(text).map((r, i) => ({ r, n: i + 1 })).filter(o => o.r.some(c => c.trim()));
   if (!all.length) throw new Error('Paste a CSV or choose a file first.');
@@ -918,6 +929,8 @@ function csvToCfg(text) {
     const kind = g('kind').toLowerCase(), name = g('name'), value = g('value');
     if (kind.startsWith('#')) continue;
     if (!name) throw new Error(`Row ${n}: the name column is empty.`);
+    if (kind === 'mode') continue;
+    if (g('mode') && g('mode').toLowerCase() !== String(chosenMode || '').toLowerCase()) continue;
     if (kind === 'setting') set[name.toLowerCase().replace(/[\s-]+/g, '_')] = { v: value, n };
     else if (kind === 'date') dates.push([name, value]);
     else if (kind === 'note') notes.push([name, value]);
@@ -940,7 +953,8 @@ function csvToCfg(text) {
         return [+q[1], q[2].toUpperCase() === 'F' ? 'F' : +q[2]];
       }) });
     } else if (kind === 'category') {
-      const id = 'c' + cats.length, names = g('score_names').split(';').map(x => x.trim()).filter(Boolean);
+      const modeId = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32);
+      const id = chosenMode ? 'm_' + (modeId || cats.length) : 'c' + cats.length, names = g('score_names').split(';').map(x => x.trim()).filter(Boolean);
       const count = g('scores') ? Math.round(number(g('scores'), n, 'scores')) : names.length || 1;
       if (count < 1 || count > 30) throw new Error(`Row ${n}: scores must be between 1 and 30.`);
       if (names.length && names.length !== count) throw new Error(`Row ${n}: ${name} has ${count} scores but ${names.length} score names.`);
@@ -991,7 +1005,31 @@ function csvToCfg(text) {
     penCap: val('deduction_limit'), slides: /^(y|yes|true|1|x)$/i.test(val('cutoffs_slide')), scale: scale.length ? scale : CSV_SCALE.map(r => r.slice()), round: rmap[rd]
   };
 }
+function csvToCfg(text) {
+  const rows = parseCsv(text), head = (rows[0] || []).map(h => h.trim().toLowerCase().replace(/[\s-]+/g, '_'));
+  const ki = head.indexOf('kind'), ni = head.indexOf('name'), vi = head.indexOf('value');
+  const defs = ki < 0 ? [] : rows.slice(1).filter(r => (r[ki] || '').trim().toLowerCase() === 'mode').map((r, i) => {
+    const name = (r[ni] || '').trim(), raw = vi < 0 ? '' : (r[vi] || '').trim();
+    const id = (raw || name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')).slice(0, 30);
+    if (!name || !/^[\w-]+$/.test(id)) throw new Error(`Mode row ${i + 2}: give the mode a name and a simple ID such as attendance.`);
+    return { id, name };
+  });
+  if (!defs.length) return csvToCfgSingle(text, null);
+  if (defs.length < 2 || defs.length > 8 || new Set(defs.map(d => d.id.toLowerCase())).size !== defs.length) throw new Error('Add between 2 and 8 modes with unique IDs.');
+  const configs = defs.map(d => csvToCfgSingle(text, d.id));
+  return { ...configs[0], modes: defs.map((d, i) => ({ ...d, cfg: configs[i] })) };
+}
 function cfgToCsv(c) {
+  if (c.modes && c.modes.length) {
+    const parsed = c.modes.map(m => parseCsv(cfgToCsv(m.cfg)).slice(1).filter(r => r.some(Boolean)));
+    const key = r => CSV_HEAD.slice(0, -1).map((_, i) => r[i] || '').join('\u001f');
+    const common = new Set(parsed[0].filter(r => (r[0] || '').toLowerCase() !== 'category' && parsed.every(rows => rows.some(x => key(x) === key(r)))).map(key));
+    const rows = [CSV_HEAD];
+    for (const m of c.modes) rows.push(CSV_HEAD.map(h => h === 'kind' ? 'mode' : h === 'name' ? m.name : h === 'value' ? m.id : ''));
+    for (const r of parsed[0]) if (common.has(key(r))) rows.push(CSV_HEAD.map((_, i) => r[i] || ''));
+    parsed.forEach((list, i) => { for (const r of list) if (!common.has(key(r))) rows.push(CSV_HEAD.map((_, j) => j === CSV_HEAD.length - 1 ? c.modes[i].id : r[j] || '')); });
+    return rows.map(r => r.map(v => /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n') + '\n';
+  }
   const rows = [CSV_HEAD], row = o => rows.push(CSV_HEAD.map(h => (o[h] ?? '') + ''));
   const set = (name, value) => { if (value !== '' && value != null && value !== false) row({ kind: 'setting', name, value }); };
   const itemName = k => { if (c.link && k === c.link.k) return c.link.n; const it = allItems(c).find(i => i.k === k); return it ? it.n : ''; };
@@ -1191,10 +1229,11 @@ function stFor(c, raw) {
   out.touched = !!raw.touched;
   out.scope = raw.scope === 'pair' ? 'pair' : 'all';
   out.pick = Array.isArray(raw.pick) ? raw.pick.filter(k => k in d.s) : null;
+  out.gradingMode = typeof raw.gradingMode === 'string' ? raw.gradingMode : '';
   return out;
 }
 
-let C, BASE, st, CUTS, NAME, WT, ITEMS, INPUTS, OUT, SEC, leftAvg = null;
+let C, BASE, BASEFOCUS, st, CUTS, NAME, WT, ITEMS, INPUTS, OUT, SEC, leftAvg = null;
 let payKey, zoom = 50;
 const planOther = () => st.solveFor === C.focus[1] ? C.focus[0] : C.focus[1];
 const free = () => C.focus.filter(k => !st.graded[k]);
@@ -1206,9 +1245,9 @@ const scopeKeys = () => st.scope === 'pair' ? free() : pool();
 /* Keeps the planned pair on ungraded scores. Graded scores drop out on their own. */
 function syncPair(force) {
   const P = pool(), keep = [];
-  for (const k of [...(st.pick || []), ...BASE.focus, ...P]) if (P.includes(k) && !keep.includes(k) && keep.length < 2) keep.push(k);
-  for (const k of [...(st.pick || []), ...BASE.focus, ...INPUTS.map(i => i.k).filter(k => !SEC.has(k))]) if (!keep.includes(k) && keep.length < 2) keep.push(k);
-  if (keep.includes(BASE.focus[0]) && keep.includes(BASE.focus[1]) && !st.pick) { keep[0] = BASE.focus[0]; keep[1] = BASE.focus[1]; }
+  for (const k of [...(st.pick || []), ...BASEFOCUS, ...P]) if (P.includes(k) && !keep.includes(k) && keep.length < 2) keep.push(k);
+  for (const k of [...(st.pick || []), ...BASEFOCUS, ...INPUTS.map(i => i.k).filter(k => !SEC.has(k))]) if (!keep.includes(k) && keep.length < 2) keep.push(k);
+  if (keep.includes(BASEFOCUS[0]) && keep.includes(BASEFOCUS[1]) && !st.pick) { keep[0] = BASEFOCUS[0]; keep[1] = BASEFOCUS[1]; }
   const sig = P.join('|');
   const changed = force || keep.join('|') !== C.focus.join('|') || sig !== syncPair.sig;
   syncPair.sig = sig; st.pair = keep;
@@ -1224,8 +1263,13 @@ const singular = n => n.replace(/s$/i, '').toLowerCase();
 const pct = v => (Math.round(v * 10) / 10) + '%';
 
 function useClass(id) {
-  BASE = getCfg(id); C = clone(BASE); C.builtin = BASE.builtin; store.active = C.id;
-  st = stFor(C, store.scores[C.id]);
+  BASE = getCfg(id);
+  const raw = store.scores[BASE.id], picked = BASE.modes && BASE.modes.find(m => m.id === (raw && raw.gradingMode));
+  const activeMode = picked || (BASE.modes ? BASE.modes[0] : null);
+  C = clone(activeMode ? activeMode.cfg : BASE); C.id = BASE.id; C.builtin = BASE.builtin; store.active = C.id;
+  BASEFOCUS = C.focus.slice();
+  st = stFor(C, raw);
+  st.gradingMode = activeMode ? activeMode.id : '';
   store.scores[C.id] = st;
   const n = C.scale.length;
   CUTS = C.scale.map((r, i) => [r[0], r[1], TOK[n === 1 ? 0 : Math.round(i * 12 / (n - 1))]]);
@@ -1269,8 +1313,8 @@ function buildClass() {
   </div>`;
   };
   document.body.classList.toggle('specmode', !!C.spec);
-  $('btnEdit').disabled = !!C.spec;
-  $('btnEdit').title = C.spec ? 'Specifications classes are set up with a CSV. See the CSV guide.' : '';
+  $('btnEdit').disabled = !!C.spec || !!BASE.modes;
+  $('btnEdit').title = C.spec ? 'Specifications classes are set up with a CSV. See the CSV guide.' : BASE.modes ? 'Classes with grading modes are set up with a CSV. See the CSV guide.' : '';
   $('rows').innerHTML = C.spec ? specRows() : C.cats.map(cat => {
     const isSec = C.bestOf && C.bestOf.by === cat.id;
     if (isSec) return rowHtml(INPUTS.find(i => i.link), cat) + cat.items.map(it => rowHtml(it, cat)).join('');
@@ -1286,6 +1330,8 @@ function buildClass() {
     <input type="number" id="n_${esc(p.k)}" data-p="${esc(p.k)}" min="0" max="${p.max}" step="${p.step}" inputmode="decimal"></div>`).join('')
     + (C.penCap != null ? `<label class="gradedbox" style="margin:0"><input type="checkbox" id="penCapBox"> Limit deductions to ${C.penCap} points</label>` : '');
   $('slideBox').hidden = !C.slides;
+  $('policyBox').hidden = !BASE.modes;
+  $('policyBtns').innerHTML = BASE.modes ? BASE.modes.map(m => `<button class="btn" data-policy="${esc(m.id)}" type="button" aria-pressed="${m.id === st.gradingMode}">${esc(m.name)}</button>`).join('') : '';
   $('strip').style.gridTemplateColumns = `repeat(${CUTS.length}, 1fr)`;
   $('strip').innerHTML = CUTS.map((c, i) => [c, i]).reverse().map(([c, i]) => `<span id="st${i}" style="background:${bandVar(i)}">${esc(c[0])}</span>`).join('');
   $('goals').innerHTML = CUTS.slice(0, -1).map((c, i) => `<button class="btn goal" id="goal${i}" data-i="${i}" type="button" style="--band:${bandVar(i)}">${esc(c[0])}</button>`).join('');
@@ -2182,8 +2228,12 @@ function renderLuck(li) {
 
 /* Class picker */
 $('classSel').addEventListener('change', e => { closeEditor(); useClass(e.target.value); save(); schedule(); });
-function exportable(c) { const { spec, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round } = c; return { titrator: 2, spec, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round }; }
-const EXAMPLE_CSV = () => cfgToCsv(normCfg({
+$('policyBtns').addEventListener('click', e => {
+  const b = e.target.closest('[data-policy]'); if (!b || b.dataset.policy === st.gradingMode) return;
+  st.gradingMode = b.dataset.policy; useClass(C.id); save(); schedule();
+});
+function exportable(c) { const { spec, modes, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round } = c; return { titrator: 2, spec, modes, name, title, semester, prof, univ, source, tagline, dates, notes, cats, replace, bestOf, pens, penCap, slides, curve, focus, scale, round }; }
+const EXAMPLE_CFG = () => ({
   name: 'Physics 141', title: 'General Physics', semester: 'Fall 2026', prof: 'Prof. Example', univ: 'Example University', source: 'Fall 2026 syllabus',
   dates: [['Midterm 2', 'Oct 20'], ['Final', 'Dec 12']],
   cats: [
@@ -2194,7 +2244,14 @@ const EXAMPLE_CSV = () => cfgToCsv(normCfg({
   ],
   replace: { by: 'c1_0', cat: 'c0' }, curve: { mult: 1.05, plus: null, cap: 100 }, focus: ['c0_1', 'c1_0'], scale: CSV_SCALE, round: 0,
   pens: [{ name: 'Absences', step: 1, steps: [[4, 3], [8, 'F']] }], slides: true
-}));
+});
+const EXAMPLE_CSV = () => {
+  const replacement = EXAMPLE_CFG(), standard = { ...clone(replacement), replace: null };
+  return cfgToCsv(normCfg({ ...replacement, modes: [
+    { id: 'replacement', name: 'Final replaces lowest', cfg: replacement },
+    { id: 'standard', name: 'All scores count', cfg: standard }
+  ] }));
+};
 function copyText(t, msg) {
   $('codeText').value = t; codePreview();
   const done = () => { $('codeNote').textContent = msg; };
@@ -2212,7 +2269,8 @@ function codePreview() {
   try {
     const c = readImport(t), sum = c.cats.reduce((a, x) => a + x.weight, 0), n = allItems(c).length;
     const warn = Math.abs(sum - 100) > .01 ? ` Weights add up to ${pct(sum)}, so they will be rescaled to 100%.` : '';
-    box.textContent = `Ready: ${c.name}, ${c.cats.length} categories, ${n} scores, ${c.scale.length} grades.${warn}`;
+    const modes = c.modes ? `, ${c.modes.length} grading modes` : '';
+    box.textContent = `Ready: ${c.name}, ${c.cats.length} categories, ${n} scores, ${c.scale.length} grades${modes}.${warn}`;
     $('codeAdd').disabled = false;
   } catch (e) {
     box.textContent = e instanceof SyntaxError ? "That doesn't look like a class code. Copy the whole thing and try again." : e.message;

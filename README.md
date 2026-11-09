@@ -12,15 +12,17 @@ An interactive course-grade calculator. Drag sliders, see your letter grade chan
 - Compares every ungraded score at once, showing what moves your grade and how possible semesters play out
 - Shows what one more point is worth, and the grades you can still reach
 - Simulates exam luck
-- Handles drops, replacement rules, better-of rules, scale-ups, weighted scores, point-based scores, deductions, sliding cutoffs and rounding
+- Handles alternate grading policies, drops, replacement rules, better-of rules, scale-ups, weighted scores, point-based scores, deductions, sliding cutoffs and rounding
 
 ## Classes
 
-Fall 2026 at Duke University: Chem 101, Compsci 201, STA 198, Writing 120 and Math 218D-2. Each class lists its rules and any assumptions.
+Fall 2026 at Duke University: Chem 101, Compsci 201, STA 198, Writing 120, Math 218D-2, BIO 201L, EGR 105L and PSY 101. Each class lists its rules and any assumptions.
 
 Mark a score as Graded and every tool updates to plan only what is left.
 
 Anyone can add their own class with **New class** or **Import class**. Those save in that person's browser. Share a class as a CSV or a class code. Neither includes scores.
+
+When a syllabus offers alternate official policies, one class can include a grading-policy selector. Switching it recalculates everything without clearing the entered scores.
 
 ## Add a class for everyone
 

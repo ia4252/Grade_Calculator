@@ -1,12 +1,14 @@
-kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step
+kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step,mode
 setting,class,Physics 141,,,,,,,,,
 setting,title,General Physics,,,,,,,,,
 setting,semester,Fall 2026,,,,,,,,,
 setting,professor,Prof. Example,,,,,,,,,
 setting,university,Example University,,,,,,,,,
 setting,source,Fall 2026 syllabus,,,,,,,,,
-setting,replace_with,Final,,,,,,,,,
-setting,replace_in,Midterms,,,,,,,,,
+mode,Final replaces lowest,replacement,,,,,,,,,,
+mode,All scores count,standard,,,,,,,,,,
+setting,replace_with,Final,,,,,,,,,,replacement
+setting,replace_in,Midterms,,,,,,,,,,replacement
 setting,scale_up_multiply,1.05,,,,,,,,,
 setting,scale_up_cap,100,,,,,,,,,
 setting,plan_first,Midterm 2,,,,,,,,,

@@ -16,26 +16,26 @@ There are two ways to use one:
 Each row has a `kind`, and only some columns apply to each kind. Leave the others blank. The first row must keep the column names.
 
 ```
-kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step
+kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step,mode
 ```
 
 A small class looks like this:
 
 ```csv
-kind,name,value,weight,scores,drop,exam,score_names
-setting,class,Biology 101,,,,,
-setting,semester,Fall 2026,,,,,
-setting,professor,Prof. Example,,,,,
-setting,university,Example University,,,,,
-setting,source,Fall 2026 syllabus,,,,,
-category,Midterms,,50,2,,yes,
-category,Final,,30,1,,yes,
-category,Homework,,20,10,1,,
-grade,A,90,,,,,
-grade,B,80,,,,,
-grade,C,70,,,,,
-grade,D,60,,,,,
-grade,F,0,,,,,
+kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step,mode
+setting,class,Biology 101
+setting,semester,Fall 2026
+setting,professor,Prof. Example
+setting,university,Example University
+setting,source,Fall 2026 syllabus
+category,Midterms,,50,2,,,,,yes
+category,Final,,30,1,,,,,yes
+category,Homework,,20,10,1
+grade,A,90
+grade,B,80
+grade,C,70
+grade,D,60
+grade,F,0
 ```
 
 Only a `class` setting and at least one `category` row are required (or `criterion` rows for all-or-nothing grading). Without `grade` rows, the class uses A+ 97 down to D− 60.
@@ -71,6 +71,23 @@ If a syllabus doesn't give the number of assignments, use one score and enter yo
 ### `note`: extra text in the class's rules list
 
 Use this for assumptions and anything a reader should check, such as `note,Weights,The syllabus says these may change.`
+
+### `mode`: alternate grading policies
+
+Use modes when one class has two or more official ways to calculate the grade. A selector appears above the score controls, and switching it keeps the student's scores in place.
+
+Add one `mode` row per choice. Put the button label in `name` and a short ID in `value`:
+
+```csv
+kind,name,value,weight,scores,drop,out_of,score_weights,scale_up,exam,score_names,step,mode
+mode,Attendance incentive,attendance,,,,,,,,,,
+mode,Final required,required,,,,,,,,,,
+category,Exams,,60,4,1,,,,yes,Exam 1;Exam 2;Exam 3;Final,,attendance
+category,Exams,,60,4,,,,,yes,Exam 1;Exam 2;Exam 3;Final,,required
+category,Projects,,40,1,,,,,,,,
+```
+
+The last `mode` column is optional. Leave it blank for rows shared by every policy. Put a mode ID there when a setting, category, grade, date, note, deduction or criterion applies only to that policy. Keep corresponding categories and score names in the same order across modes so the display stays consistent and saved scores carry across cleanly.
 
 ### `deduction`: points taken off the final grade
 
@@ -124,7 +141,8 @@ Turn this syllabus into a Grade Titrator class CSV. Follow the attached CSV_GUID
 exactly. Use the columns from class-template.csv. Include the class, title, semester,
 professor, university and source settings. Only use rules the syllabus states. If the
 syllabus leaves something out, such as how a category splits, use the simplest reading
-and add a note row saying so. Give me only the CSV.
+and add a note row saying so. If the syllabus offers alternate official grading
+policies, put them in one CSV with mode rows and scoped mode values. Give me only the CSV.
 ```
 
 ## Add a class for everyone

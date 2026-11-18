@@ -125,6 +125,7 @@ Put the setting in `name` and its value in `value`.
 | `source` | Where the rules came from and when it was added |
 | `description` | A short line under the title |
 | `replace_with`, `replace_in` | A score that replaces the lowest score in a category if higher, such as `Final` and `Tests` |
+| `replace_share` | How much of that lowest score gets replaced, such as `0.5` for half. Leave it out to replace all of it. |
 | `better_of_category`, `better_of_with` | Each score keeps the better of itself and its match in another category with the same number of scores |
 | `scale_up_multiply`, `scale_up_add`, `scale_up_cap` | The scale-up amount. Set both multiply and add to get a switch between the two. |
 | `plan_first`, `plan_second` | The two scores the planner starts on |

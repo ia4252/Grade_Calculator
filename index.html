@@ -677,7 +677,7 @@ function course(c, s, read) {
     lo = items[0].k;
     for (const it of items) if (e[it.k] < e[lo]) lo = it.k;
     orig = e[lo];
-    if (e[c.replace.by] > orig) { replaced = true; e[lo] = e[c.replace.by]; swaps.push(lo); }
+    if (e[c.replace.by] > orig) { replaced = true; e[lo] = orig + (c.replace.share ?? 1) * (e[c.replace.by] - orig); swaps.push(lo); }
   }
   let sum = 0, W = 0;
   for (const cat of c.cats) {
@@ -797,7 +797,7 @@ function normCfg(x) {
   let replace = null;
   if (x.replace && x.replace.by && x.replace.cat) {
     const cat = cats.find(k => k.id === x.replace.cat);
-    if (cat && keys.includes(x.replace.by) && !cat.items.some(i => i.k === x.replace.by)) replace = { by: x.replace.by, cat: cat.id };
+    if (cat && keys.includes(x.replace.by) && !cat.items.some(i => i.k === x.replace.by)) replace = { by: x.replace.by, cat: cat.id, share: x.replace.share == null || x.replace.share === '' ? 1 : num(x.replace.share, 0.01, 1, 1) };
     else throw new Error('The replacing score has to be outside the category it replaces in.');
   }
   if (!Array.isArray(x.scale) || x.scale.length < 2) throw new Error('The grade scale needs at least two grades.');
@@ -990,7 +990,7 @@ function csvToCfgSingle(text, chosenMode) {
   };
   if (val('replace_with') || val('replace_in')) {
     if (!set.replace_with || !set.replace_in) throw new Error('A replacement rule needs both replace_with and replace_in.');
-    replace = { by: findItem(set.replace_with), cat: findCat(set.replace_in).id };
+    replace = { by: findItem(set.replace_with), cat: findCat(set.replace_in).id, share: val('replace_share') ? (v => v > 1 ? v / 100 : v)(number(val('replace_share').replace('%', ''), set.replace_share.n, 'replace_share')) : 1 };
   }
   const mult = val('scale_up_multiply'), plus = val('scale_up_add');
   if (mult || plus) curve = { mult: mult ? number(mult, set.scale_up_multiply.n, 'scale_up_multiply') : null, plus: plus ? number(plus, set.scale_up_add.n, 'scale_up_add') : null, cap: val('scale_up_cap') ? number(val('scale_up_cap'), set.scale_up_cap.n, 'scale_up_cap') : 100 };
@@ -1041,7 +1041,7 @@ function cfgToCsv(c) {
     for (const n of c.notes || []) row({ kind: 'note', name: n[0], value: n[1] });
     return rows.map(r => r.map(v => /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join(',')).join('\n') + '\n';
   }
-  if (c.replace) { set('replace_with', itemName(c.replace.by)); set('replace_in', c.cats.find(x => x.id === c.replace.cat).name); }
+  if (c.replace) { set('replace_with', itemName(c.replace.by)); set('replace_in', c.cats.find(x => x.id === c.replace.cat).name); if ((c.replace.share ?? 1) !== 1) set('replace_share', c.replace.share); }
   if (c.bestOf) { set('better_of_category', c.cats.find(x => x.id === c.bestOf.cat).name); set('better_of_with', c.cats.find(x => x.id === c.bestOf.by).name); }
   if (c.curve) { set('scale_up_multiply', c.curve.mult); set('scale_up_add', c.curve.plus); set('scale_up_cap', c.curve.cap); }
   set('plan_first', itemName(c.focus[0])); set('plan_second', itemName(c.focus[1]));
@@ -1094,7 +1094,7 @@ const CS201 = {
   cats: [
     { id: 'mid', name: 'Midterms', weight: 30, items: series('m', ['Midterm', 'M'], 3, { exam: true }) },
     { id: 'fin', name: 'Final', weight: 14, items: series('s', ['Final section', 'F'], 3, {}) },
-    { id: 'proj', name: 'Projects', weight: 26, items: series('p', ['Project', 'P'], 8, { exam: true }).map((it, i) => ({ ...it, w: [1, 1, 2, 2, 2, 3, 3, 3][i] })) },
+    { id: 'proj', name: 'Projects', weight: 26, items: series('p', ['Project', 'P'], 8, { exam: true }).map((it, i) => ({ ...it, n: `Project ${i}`, sh: `P${i}`, w: [1, 1, 2, 2, 2, 3, 3, 3][i] })) },
     { id: 'apt', name: 'APTs', weight: 8, items: [{ k: 'apt', n: 'APTs', sh: 'APT', exam: true }] },
     { id: 'aptq', name: 'APT Quizzes', weight: 8, items: series('q', ['APT Quiz', 'Q'], 2, { exam: true }) },
     { id: 'eng', name: 'Engagement', weight: 7, outOf: 280, items: [{ k: 'eng', n: 'Engagement', sh: 'Eng', exam: true }] },
@@ -1786,7 +1786,7 @@ function render() {
     : 'Top of the scale';
   if (C.replace) {
     const cat = C.cats.find(x => x.id === C.replace.cat), tn = cat.items.find(i => i.k === r.lo).n, by = NAME[C.replace.by];
-    const gain = (cat.weight / cat.items.length / 100) * (s[C.replace.by] - r.orig);
+    const gain = (cat.weight / cat.items.length / 100) * (C.replace.share ?? 1) * (s[C.replace.by] - r.orig);
     $('saySub').textContent = r.replaced
       ? `${by} replaces ${tn} (${fmt(r.orig)} → ${fmt(s[C.replace.by])}), adding ${gain.toFixed(2)} points.`
       : `${by} is not above your lowest ${singular(cat.name)} (${tn}, ${fmt(r.orig)}), so nothing is replaced.`;
